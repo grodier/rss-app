@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
+
+	"github.com/grodier/rss-app/server"
 )
 
 type Application struct {
@@ -36,6 +37,11 @@ func defaultConfig() config {
 }
 
 func (app *Application) Run(ctx context.Context, args []string) error {
-	fmt.Println("Application Running")
+	srv := server.NewServer(app.logger)
+
+	if err := srv.Serve(); err != nil {
+		return err
+	}
+
 	return nil
 }
