@@ -14,6 +14,7 @@ type Application struct {
 
 func NewApplication(logger *slog.Logger) *Application {
 	return &Application{
+		config: defaultConfig(),
 		logger: logger,
 	}
 }
@@ -38,6 +39,8 @@ func defaultConfig() config {
 
 func (app *Application) Run(ctx context.Context, args []string) error {
 	srv := server.NewServer(app.logger)
+	srv.Port = app.config.server.port
+	srv.Env = app.config.env
 
 	if err := srv.Serve(); err != nil {
 		return err
