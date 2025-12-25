@@ -130,7 +130,7 @@ func TestParseConfigs_InvalidEnv(t *testing.T) {
 	}
 }
 
-func TestParseConfigs_InvalidEnvProduction(t *testing.T) {
+func TestParseConfigs_ValidDevelopmentEnv(t *testing.T) {
 	handler := &TestLogHandler{}
 	logger := slog.New(handler)
 	app := NewApplication(logger)
