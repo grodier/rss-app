@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log/slog"
 
 	"github.com/grodier/rss-app/server"
@@ -38,6 +39,8 @@ func defaultConfig() config {
 }
 
 func (app *Application) Run(ctx context.Context, args []string) error {
+	app.config = app.ParseConfigs(args)
+
 	srv := server.NewServer(app.logger)
 	srv.Port = app.config.server.port
 	srv.Env = app.config.env
@@ -47,4 +50,21 @@ func (app *Application) Run(ctx context.Context, args []string) error {
 	}
 
 	return nil
+}
+
+func (app *Application) ParseConfigs(args []string) config {
+	config := defaultConfig()
+
+	fs := flag.NewFlagSet("rss-go", flag.ContinueOnError)
+	fs.StringVar(&config.env, "env", config.env, "Environment (development|production)")
+	fs.IntVar(&config.server.port, "port", config.server.port, "Server port")
+
+	fs.Parse(args)
+
+	if config.env != "development" && config.env != "production" {
+		app.logger.Warn("invalid environment value, falling back to default", "provided", config.env, "default", "development")
+		config.env = "development"
+	}
+
+	return config
 }
