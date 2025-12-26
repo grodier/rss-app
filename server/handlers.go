@@ -23,6 +23,7 @@ func (s *Server) handleShowFeed(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id < 1 {
 		http.NotFound(w, r)
+		return
 	}
 
 	fmt.Fprintf(w, "show the details of feed %d\n", id)
