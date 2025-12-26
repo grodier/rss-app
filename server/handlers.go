@@ -25,5 +25,5 @@ func (s *Server) handleShowFeed(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}
 
-	fmt.Fprintf(w, "show the details of movie %d\n", id)
+	fmt.Fprintf(w, "show the details of feed %d\n", id)
 }
