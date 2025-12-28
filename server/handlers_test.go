@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -11,8 +12,12 @@ import (
 func TestHandleHealthcheck(t *testing.T) {
 	// Create a test server instance with minimal dependencies
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	version := "test-version"
+	env := "test-env"
 	s := &Server{
-		logger: logger,
+		logger:  logger,
+		Version: version,
+		Env:     env,
 	}
 
 	// Create a new HTTP request for the healthcheck endpoint
@@ -29,10 +34,30 @@ func TestHandleHealthcheck(t *testing.T) {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
 
+	// Assert the Content-Type header
+	contentType := rr.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("handler returned wrong content type: got %v want %v", contentType, "application/json")
+	}
+
 	// Assert the response body
-	expected := "OK"
-	if rr.Body.String() != expected {
-		t.Errorf("handler returned unexpected body: got %v want %v", rr.Body.String(), expected)
+	var response map[string]string
+	err := json.Unmarshal(rr.Body.Bytes(), &response)
+	if err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	expectedStatus := "available"
+	if response["status"] != expectedStatus {
+		t.Errorf("expected status to be %v, got %v", expectedStatus, response["status"])
+	}
+
+	if response["environment"] != env {
+		t.Errorf("expected environment to be %v, got %v", env, response["environment"])
+	}
+
+	if response["version"] != version {
+		t.Errorf("expected version to be %v, got %v", version, response["version"])
 	}
 }
 

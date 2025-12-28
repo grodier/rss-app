@@ -6,6 +6,8 @@ import (
 	"os"
 )
 
+const version = "0.1.0"
+
 func main() {
 	ctx := context.Background()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))

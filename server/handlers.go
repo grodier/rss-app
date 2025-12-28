@@ -6,8 +6,17 @@ import (
 )
 
 func (s *Server) handleHealthcheck(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	data := map[string]string{
+		"status":      "available",
+		"environment": s.Env,
+		"version":     s.Version,
+	}
+
+	err := s.writeJSON(w, http.StatusOK, data, nil)
+	if err != nil {
+		s.logger.Error(err.Error())
+		http.Error(w, "The server encountered a problem and could not process your request", http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
