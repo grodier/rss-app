@@ -6,8 +6,12 @@ import (
 )
 
 func (s *Server) handleHealthcheck(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	js := `{"status": "available","environment": %q,"version": %q}`
+	js = fmt.Sprintf(js, s.Env, s.Version)
+
+	w.Header().Set("Content-Type", "application/json")
+
+	w.Write([]byte(js))
 }
 
 func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {

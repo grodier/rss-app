@@ -13,8 +13,9 @@ import (
 )
 
 type Server struct {
-	Port int
-	Env  string
+	Port    int
+	Env     string
+	Version string
 
 	server *http.Server
 	logger *slog.Logger
