@@ -1,17 +1,29 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 )
 
 func (s *Server) handleHealthcheck(w http.ResponseWriter, r *http.Request) {
-	js := `{"status": "available","environment": %q,"version": %q}`
-	js = fmt.Sprintf(js, s.Env, s.Version)
+	data := map[string]string{
+		"status":      "available",
+		"environment": s.Env,
+		"version":     s.Version,
+	}
+
+	js, err := json.Marshal(data)
+	if err != nil {
+		s.logger.Error(err.Error())
+		http.Error(w, "The server encountered a problem and could not process your request", http.StatusInternalServerError)
+		return
+	}
+
+	js = append(js, '\n')
 
 	w.Header().Set("Content-Type", "application/json")
-
-	w.Write([]byte(js))
+	w.Write(js)
 }
 
 func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
