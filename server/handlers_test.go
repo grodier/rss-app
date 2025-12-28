@@ -52,14 +52,12 @@ func TestHandleHealthcheck(t *testing.T) {
 		t.Errorf("expected status to be %v, got %v", expectedStatus, response["status"])
 	}
 
-	expectedEnv := env
-	if response["environment"] != expectedEnv {
-		t.Errorf("expected environment to be %v, got %v", expectedEnv, response["environment"])
+	if response["environment"] != env {
+		t.Errorf("expected environment to be %v, got %v", env, response["environment"])
 	}
 
-	expectedVersion := version
-	if response["version"] != expectedVersion {
-		t.Errorf("expected version to be %v, got %v", expectedVersion, response["version"])
+	if response["version"] != version {
+		t.Errorf("expected version to be %v, got %v", version, response["version"])
 	}
 }
 
