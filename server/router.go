@@ -9,6 +9,8 @@ import (
 func (s *Server) router() http.Handler {
 	router := chi.NewRouter()
 
+	router.Use(s.recoverPanic)
+
 	router.NotFound(s.notFoundResponse)
 	router.MethodNotAllowed(s.methodNotAllowedResponse)
 
