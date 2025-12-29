@@ -9,6 +9,9 @@ import (
 func (s *Server) router() http.Handler {
 	router := chi.NewRouter()
 
+	router.NotFound(s.notFoundResponse)
+	router.MethodNotAllowed(s.methodNotAllowedResponse)
+
 	router.Get("/v1/healthcheck", s.handleHealthcheck)
 	router.Post("/v1/admin/feeds", s.handleCreateFeed)
 	router.Get("/v1/feeds/{id}", s.handleShowFeed)

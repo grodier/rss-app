@@ -19,8 +19,7 @@ func (s *Server) handleHealthcheck(w http.ResponseWriter, r *http.Request) {
 
 	err := s.writeJSON(w, http.StatusOK, data, nil)
 	if err != nil {
-		s.logger.Error(err.Error())
-		http.Error(w, "The server encountered a problem and could not process your request", http.StatusInternalServerError)
+		s.serverErrorResponse(w, r, err)
 	}
 }
 
@@ -31,7 +30,7 @@ func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleShowFeed(w http.ResponseWriter, r *http.Request) {
 	id, err := s.readIDParam(r)
 	if err != nil {
-		http.NotFound(w, r)
+		s.notFoundResponse(w, r)
 		return
 	}
 
@@ -46,7 +45,6 @@ func (s *Server) handleShowFeed(w http.ResponseWriter, r *http.Request) {
 
 	err = s.writeJSON(w, http.StatusOK, envelope{"feed": feed}, nil)
 	if err != nil {
-		s.logger.Error(err.Error())
-		http.Error(w, "The server encountered a problem and could not process your request", http.StatusInternalServerError)
+		s.serverErrorResponse(w, r, err)
 	}
 }
