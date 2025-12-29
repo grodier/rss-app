@@ -91,14 +91,22 @@ func TestHandleCreateFeed(t *testing.T) {
 
 func TestHandleShowFeed(t *testing.T) {
 	tests := []struct {
-		name           string
-		id             string
-		expectedStatus int
+		name             string
+		id               string
+		expectedStatus   int
+		expectedResponse map[string]any
 	}{
 		{
 			name:           "valid id",
 			id:             "1",
 			expectedStatus: http.StatusOK,
+			expectedResponse: map[string]any{
+				"id":          float64(1),
+				"title":       "Test Site",
+				"description": "Description for a test feed",
+				"url":         "https://test.com/rss.xml",
+				"site_url":    "https://test.com/",
+			},
 		},
 		{
 			name:           "non-integer id",
@@ -133,6 +141,34 @@ func TestHandleShowFeed(t *testing.T) {
 
 			if status := rr.Code; status != tt.expectedStatus {
 				t.Errorf("handler returned wrong status code: got %v want %v", status, tt.expectedStatus)
+			}
+
+			// For valid responses, check JSON structure
+			if tt.expectedStatus == http.StatusOK && tt.expectedResponse != nil {
+				// Assert the Content-Type header
+				contentType := rr.Header().Get("Content-Type")
+				if contentType != "application/json" {
+					t.Errorf("handler returned wrong content type: got %v want %v", contentType, "application/json")
+				}
+
+				// Parse the response
+				var response map[string]any
+				err := json.Unmarshal(rr.Body.Bytes(), &response)
+				if err != nil {
+					t.Fatalf("failed to unmarshal response: %v", err)
+				}
+
+				// Check all expected fields
+				for key, expectedValue := range tt.expectedResponse {
+					if response[key] != expectedValue {
+						t.Errorf("expected %s to be %v, got %v", key, expectedValue, response[key])
+					}
+				}
+
+				// Ensure createdAt is not present
+				if _, exists := response["createdAt"]; exists {
+					t.Error("expected createdAt field to not be present")
+				}
 			}
 		})
 	}

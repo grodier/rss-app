@@ -3,6 +3,9 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"time"
+
+	"github.com/grodier/rss-app/models"
 )
 
 func (s *Server) handleHealthcheck(w http.ResponseWriter, r *http.Request) {
@@ -30,5 +33,18 @@ func (s *Server) handleShowFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, "show the details of feed %d\n", id)
+	data := models.Feed{
+		ID:          id,
+		Title:       "Test Site",
+		Description: "Description for a test feed",
+		URL:         "https://test.com/rss.xml",
+		SiteURL:     "https://test.com/",
+		CreatedAt:   time.Now(),
+	}
+
+	err = s.writeJSON(w, http.StatusOK, data, nil)
+	if err != nil {
+		s.logger.Error(err.Error())
+		http.Error(w, "The server encountered a problem and could not process your request", http.StatusInternalServerError)
+	}
 }
