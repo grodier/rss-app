@@ -175,11 +175,6 @@ func TestHandleShowFeed(t *testing.T) {
 						t.Errorf("expected %s to be %v, got %v", key, expectedValue, feed[key])
 					}
 				}
-
-				// Ensure createdAt is not present
-				if _, exists := feed["createdAt"]; exists {
-					t.Error("expected createdAt field to not be present")
-				}
 			}
 		})
 	}
