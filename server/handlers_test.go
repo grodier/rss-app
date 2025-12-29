@@ -41,25 +41,30 @@ func TestHandleHealthcheck(t *testing.T) {
 	}
 
 	// Assert the response body
-	var response map[string]string
-	err := json.Unmarshal(rr.Body.Bytes(), &response)
+	var envelope map[string]any
+	err := json.Unmarshal(rr.Body.Bytes(), &envelope)
 	if err != nil {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
+	// Check status field
 	expectedStatus := "available"
-	if response["status"] != expectedStatus {
-		t.Errorf("expected status to be %v, got %v", expectedStatus, response["status"])
+	if envelope["status"] != expectedStatus {
+		t.Errorf("expected status to be %v, got %v", expectedStatus, envelope["status"])
 	}
 
-	expectedEnv := env
-	if response["environment"] != expectedEnv {
-		t.Errorf("expected environment to be %v, got %v", expectedEnv, response["environment"])
+	// Check system_info field
+	systemInfo, ok := envelope["system_info"].(map[string]any)
+	if !ok {
+		t.Fatal("expected system_info to be a map")
 	}
 
-	expectedVersion := version
-	if response["version"] != expectedVersion {
-		t.Errorf("expected version to be %v, got %v", expectedVersion, response["version"])
+	if systemInfo["environment"] != env {
+		t.Errorf("expected environment to be %v, got %v", env, systemInfo["environment"])
+	}
+
+	if systemInfo["version"] != version {
+		t.Errorf("expected version to be %v, got %v", version, systemInfo["version"])
 	}
 }
 
@@ -151,22 +156,28 @@ func TestHandleShowFeed(t *testing.T) {
 					t.Errorf("handler returned wrong content type: got %v want %v", contentType, "application/json")
 				}
 
-				// Parse the response
-				var response map[string]any
-				err := json.Unmarshal(rr.Body.Bytes(), &response)
+				// Parse the envelope
+				var envelope map[string]any
+				err := json.Unmarshal(rr.Body.Bytes(), &envelope)
 				if err != nil {
 					t.Fatalf("failed to unmarshal response: %v", err)
 				}
 
+				// Extract the feed from the envelope
+				feed, ok := envelope["feed"].(map[string]any)
+				if !ok {
+					t.Fatal("expected feed to be a map in the envelope")
+				}
+
 				// Check all expected fields
 				for key, expectedValue := range tt.expectedResponse {
-					if response[key] != expectedValue {
-						t.Errorf("expected %s to be %v, got %v", key, expectedValue, response[key])
+					if feed[key] != expectedValue {
+						t.Errorf("expected %s to be %v, got %v", key, expectedValue, feed[key])
 					}
 				}
 
 				// Ensure createdAt is not present
-				if _, exists := response["createdAt"]; exists {
+				if _, exists := feed["createdAt"]; exists {
 					t.Error("expected createdAt field to not be present")
 				}
 			}
