@@ -117,6 +117,12 @@ func TestHandleCreateFeed(t *testing.T) {
 			expectedStatus:   http.StatusBadRequest,
 			expectedResponse: `{"error":"body contains unknown key \"unknown_field\""}` + "\n",
 		},
+		{
+			name:             "multiple json values",
+			body:             `{"title": "Test Site"} {"description": "Another description"}`,
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error":"body must only contain a single JSON value"}` + "\n",
+		},
 	}
 
 	for _, tt := range tests {
