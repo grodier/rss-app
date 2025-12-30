@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -49,7 +50,10 @@ func (s *Server) writeJSON(w http.ResponseWriter, status int, data envelope, hea
 
 // From let's go further book. See for further explanation on different potential errors
 func (s *Server) readJSON(w http.ResponseWriter, r *http.Request, dst any) error {
-	err := json.NewDecoder(r.Body).Decode(dst)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+
+	err := dec.Decode(dst)
 	if err != nil {
 		var syntaxError *json.SyntaxError
 		var unmarshalTypeError *json.UnmarshalTypeError
@@ -70,6 +74,10 @@ func (s *Server) readJSON(w http.ResponseWriter, r *http.Request, dst any) error
 
 		case errors.Is(err, io.EOF):
 			return errors.New("body must not be empty")
+
+		case strings.HasPrefix(err.Error(), "json: unknown field "):
+			fieldName := strings.TrimPrefix(err.Error(), "json: unknown field ")
+			return fmt.Errorf("body contains unknown key %s", fieldName)
 
 		case errors.As(err, &invalidUnmarshalError):
 			panic(err)

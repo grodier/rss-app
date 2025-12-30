@@ -111,6 +111,12 @@ func TestHandleCreateFeed(t *testing.T) {
 			expectedStatus:   http.StatusBadRequest,
 			expectedResponse: `{"error":"body contains badly-formed JSON (at character 20)"}` + "\n",
 		},
+		{
+			name:             "unknown field in json",
+			body:             `{"title": "Test Site", "unknown_field": "value"}`,
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error":"body contains unknown key \"unknown_field\""}` + "\n",
+		},
 	}
 
 	for _, tt := range tests {
