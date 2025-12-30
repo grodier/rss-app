@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -69,28 +70,83 @@ func TestHandleHealthcheck(t *testing.T) {
 }
 
 func TestHandleCreateFeed(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	s := &Server{
-		logger: logger,
+	tests := []struct {
+		name             string
+		body             string
+		expectedStatus   int
+		expectedResponse string
+	}{
+		{
+			name: "valid feed creation",
+			body: `{
+				"title": "Test Site",
+				"description": "Description for a test feed",
+				"url": "https://test.com/rss.xml",
+				"site_url": "https://test.com/"
+			}`,
+			expectedStatus:   http.StatusOK,
+			expectedResponse: "{Title:Test Site Description:Description for a test feed URL:https://test.com/rss.xml SiteURL:https://test.com/}\n",
+		},
+		{
+			name:             "empty body feed creation",
+			body:             "",
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error":"body must not be empty"}` + "\n",
+		},
+		{
+			name:             "incorrect content type",
+			body:             `{"title": 123}`,
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error":"body contains incorrect JSON type for field \"title\""}` + "\n",
+		},
+		{
+			name:             "incorrect json type",
+			body:             `["foo", "bar"]`,
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error":"body contains incorrect JSON type (at character 1)"}` + "\n",
+		},
+		{
+			name:             "malformed json",
+			body:             `{"title": "Moana", }`,
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error":"body contains badly-formed JSON (at character 20)"}` + "\n",
+		},
+		{
+			name:             "unknown field in json",
+			body:             `{"title": "Test Site", "unknown_field": "value"}`,
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error":"body contains unknown key \"unknown_field\""}` + "\n",
+		},
+		{
+			name:             "multiple json values",
+			body:             `{"title": "Test Site"} {"description": "Another description"}`,
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error":"body must only contain a single JSON value"}` + "\n",
+		},
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/admin/feeds", nil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+			s := &Server{
+				logger: logger,
+			}
 
-	// Create a ResponseRecorder to record the response
-	rr := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/v1/admin/feeds", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
 
-	// Call the handler directly
-	s.handleCreateFeed(rr, req)
+			rr := httptest.NewRecorder()
 
-	// Assert the status code
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
-	}
+			s.handleCreateFeed(rr, req)
 
-	// Assert the response body
-	expected := "create a new feed\n"
-	if rr.Body.String() != expected {
-		t.Errorf("handler returned unexpected body: got %v want %v", rr.Body.String(), expected)
+			if status := rr.Code; status != tt.expectedStatus {
+				t.Errorf("handler returned wrong status code: got %v want %v", status, tt.expectedStatus)
+			}
+
+			if rr.Body.String() != tt.expectedResponse {
+				t.Errorf("handler returned unexpected body: got %v want %v", rr.Body.String(), tt.expectedResponse)
+			}
+		})
 	}
 }
 

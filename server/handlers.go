@@ -24,7 +24,20 @@ func (s *Server) handleHealthcheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "create a new feed")
+	var input struct {
+		Title       string `json:"title"`
+		Description string `json:"description"`
+		URL         string `json:"url"`
+		SiteURL     string `json:"site_url"`
+	}
+
+	err := s.readJSON(w, r, &input)
+	if err != nil {
+		s.badRequestResponse(w, r, err)
+		return
+	}
+
+	fmt.Fprintf(w, "%+v\n", input)
 }
 
 func (s *Server) handleShowFeed(w http.ResponseWriter, r *http.Request) {
