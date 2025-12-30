@@ -87,6 +87,30 @@ func TestHandleCreateFeed(t *testing.T) {
 			expectedStatus:   http.StatusOK,
 			expectedResponse: "{Title:Test Site Description:Description for a test feed URL:https://test.com/rss.xml SiteURL:https://test.com/}\n",
 		},
+		{
+			name:             "empty body feed creation",
+			body:             "",
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error":"body must not be empty"}` + "\n",
+		},
+		{
+			name:             "incorrect content type",
+			body:             `{"title": 123}`,
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error":"body contains incorrect JSON type for field \"title\""}` + "\n",
+		},
+		{
+			name:             "incorrect json type",
+			body:             `["foo", "bar"]`,
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error":"body contains incorrect JSON type (at character 1)"}` + "\n",
+		},
+		{
+			name:             "malformed json",
+			body:             `{"title": "Moana", }`,
+			expectedStatus:   http.StatusBadRequest,
+			expectedResponse: `{"error":"body contains badly-formed JSON (at character 20)"}` + "\n",
+		},
 	}
 
 	for _, tt := range tests {

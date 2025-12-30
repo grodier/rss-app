@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -32,9 +31,9 @@ func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 		SiteURL     string `json:"site_url"`
 	}
 
-	err := json.NewDecoder(r.Body).Decode(&input)
+	err := s.readJSON(w, r, &input)
 	if err != nil {
-		s.errorResponse(w, r, http.StatusBadRequest, err.Error())
+		s.badRequestResponse(w, r, err)
 		return
 	}
 
