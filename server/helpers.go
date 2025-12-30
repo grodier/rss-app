@@ -50,6 +50,8 @@ func (s *Server) writeJSON(w http.ResponseWriter, status int, data envelope, hea
 
 // From let's go further book. See for further explanation on different potential errors
 func (s *Server) readJSON(w http.ResponseWriter, r *http.Request, dst any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, 1_048_576)
+
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 
@@ -58,6 +60,7 @@ func (s *Server) readJSON(w http.ResponseWriter, r *http.Request, dst any) error
 		var syntaxError *json.SyntaxError
 		var unmarshalTypeError *json.UnmarshalTypeError
 		var invalidUnmarshalError *json.InvalidUnmarshalError
+		var maxBytesError *http.MaxBytesError
 
 		switch {
 		case errors.As(err, &syntaxError):
@@ -78,6 +81,9 @@ func (s *Server) readJSON(w http.ResponseWriter, r *http.Request, dst any) error
 		case strings.HasPrefix(err.Error(), "json: unknown field "):
 			fieldName := strings.TrimPrefix(err.Error(), "json: unknown field ")
 			return fmt.Errorf("body contains unknown key %s", fieldName)
+
+		case errors.As(err, &maxBytesError):
+			return fmt.Errorf("body must not be larger than %d bytes", maxBytesError.Limit)
 
 		case errors.As(err, &invalidUnmarshalError):
 			panic(err)
