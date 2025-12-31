@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/grodier/rss-app/models"
+	"github.com/grodier/rss-app/internal/models"
 )
 
 func (s *Server) handleHealthcheck(w http.ResponseWriter, r *http.Request) {

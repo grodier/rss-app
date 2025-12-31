@@ -5,7 +5,7 @@ import (
 	"flag"
 	"log/slog"
 
-	"github.com/grodier/rss-app/server"
+	"github.com/grodier/rss-app/internal/server"
 )
 
 type Application struct {
