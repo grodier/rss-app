@@ -5,7 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/grodier/rss-app/models"
+	"github.com/grodier/rss-app/internal/models"
+	"github.com/grodier/rss-app/internal/validator"
 )
 
 func (s *Server) handleHealthcheck(w http.ResponseWriter, r *http.Request) {
@@ -34,6 +35,20 @@ func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 	err := s.readJSON(w, r, &input)
 	if err != nil {
 		s.badRequestResponse(w, r, err)
+		return
+	}
+
+	feed := &models.Feed{
+		Title:       input.Title,
+		Description: input.Description,
+		URL:         input.URL,
+		SiteURL:     input.SiteURL,
+	}
+
+	v := validator.NewValidator()
+
+	if models.ValidateFeed(v, feed); !v.Valid() {
+		s.failedValidationResponse(w, r, v.Errors)
 		return
 	}
 

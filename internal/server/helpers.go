@@ -139,3 +139,7 @@ func (s *Server) methodNotAllowedResponse(w http.ResponseWriter, r *http.Request
 	message := fmt.Sprintf("the %s method is not supported for this resource", r.Method)
 	s.errorResponse(w, r, http.StatusMethodNotAllowed, message)
 }
+
+func (s *Server) failedValidationResponse(w http.ResponseWriter, r *http.Request, errors map[string]string) {
+	s.errorResponse(w, r, http.StatusUnprocessableEntity, errors)
+}
