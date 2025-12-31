@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/grodier/rss-app/internal/models"
+	"github.com/grodier/rss-app/internal/validator"
 )
 
 func (s *Server) handleHealthcheck(w http.ResponseWriter, r *http.Request) {
@@ -34,6 +35,19 @@ func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 	err := s.readJSON(w, r, &input)
 	if err != nil {
 		s.badRequestResponse(w, r, err)
+		return
+	}
+
+	v := validator.NewValidator()
+
+	v.Check(input.Title != "", "title", "must be provided")
+	v.Check(len(input.Title) <= 500, "title", "must not be more than 500 bytes long")
+	v.Check(input.Description != "", "description", "must be provided")
+	v.Check(input.URL != "", "url", "must be provided")
+	v.Check(input.SiteURL != "", "site_url", "must be provided")
+
+	if !v.Valid() {
+		s.failedValidationResponse(w, r, v.Errors)
 		return
 	}
 

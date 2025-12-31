@@ -75,6 +75,7 @@ func TestHandleCreateFeed(t *testing.T) {
 		body             string
 		expectedStatus   int
 		expectedResponse string
+		expectedErrors   map[string]string
 	}{
 		{
 			name: "valid feed creation",
@@ -123,6 +124,83 @@ func TestHandleCreateFeed(t *testing.T) {
 			expectedStatus:   http.StatusBadRequest,
 			expectedResponse: `{"error":"body must only contain a single JSON value"}` + "\n",
 		},
+		{
+			name: "missing title",
+			body: `{
+				"description": "Description for a test feed",
+				"url": "https://test.com/rss.xml",
+				"site_url": "https://test.com/"
+			}`,
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedErrors: map[string]string{
+				"title": "must be provided",
+			},
+		},
+		{
+			name: "title too long",
+			body: `{
+				"title": "` + strings.Repeat("a", 501) + `",
+				"description": "Description for a test feed",
+				"url": "https://test.com/rss.xml",
+				"site_url": "https://test.com/"
+			}`,
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedErrors: map[string]string{
+				"title": "must not be more than 500 bytes long",
+			},
+		},
+		{
+			name: "missing description",
+			body: `{
+				"title": "Test Site",
+				"url": "https://test.com/rss.xml",
+				"site_url": "https://test.com/"
+			}`,
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedErrors: map[string]string{
+				"description": "must be provided",
+			},
+		},
+		{
+			name: "missing url",
+			body: `{
+				"title": "Test Site",
+				"description": "Description for a test feed",
+				"site_url": "https://test.com/"
+			}`,
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedErrors: map[string]string{
+				"url": "must be provided",
+			},
+		},
+		{
+			name: "missing site_url",
+			body: `{
+				"title": "Test Site",
+				"description": "Description for a test feed",
+				"url": "https://test.com/rss.xml"
+			}`,
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedErrors: map[string]string{
+				"site_url": "must be provided",
+			},
+		},
+		{
+			name: "multiple validation failures",
+			body: `{
+				"title": "",
+				"description": "",
+				"url": "",
+				"site_url": ""
+			}`,
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedErrors: map[string]string{
+				"title":       "must be provided",
+				"description": "must be provided",
+				"url":         "must be provided",
+				"site_url":    "must be provided",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -143,8 +221,39 @@ func TestHandleCreateFeed(t *testing.T) {
 				t.Errorf("handler returned wrong status code: got %v want %v", status, tt.expectedStatus)
 			}
 
-			if rr.Body.String() != tt.expectedResponse {
-				t.Errorf("handler returned unexpected body: got %v want %v", rr.Body.String(), tt.expectedResponse)
+			if tt.expectedErrors != nil {
+				// Parse the response to check for validation errors
+				var envelope map[string]any
+				err := json.Unmarshal(rr.Body.Bytes(), &envelope)
+				if err != nil {
+					t.Fatalf("failed to unmarshal response: %v", err)
+				}
+
+				errors, ok := envelope["error"].(map[string]any)
+				if !ok {
+					t.Fatal("expected errors to be a map in the response")
+				}
+
+				// Check that all expected errors are present
+				for key, expectedMsg := range tt.expectedErrors {
+					actualMsg, exists := errors[key]
+					if !exists {
+						t.Errorf("expected error for field %s, but it was not present", key)
+						continue
+					}
+					if actualMsg != expectedMsg {
+						t.Errorf("expected error for %s to be '%s', got '%s'", key, expectedMsg, actualMsg)
+					}
+				}
+
+				// Check that no unexpected errors are present
+				if len(errors) != len(tt.expectedErrors) {
+					t.Errorf("expected %d errors, got %d", len(tt.expectedErrors), len(errors))
+				}
+			} else if tt.expectedResponse != "" {
+				if rr.Body.String() != tt.expectedResponse {
+					t.Errorf("handler returned unexpected body: got %v want %v", rr.Body.String(), tt.expectedResponse)
+				}
 			}
 		})
 	}
