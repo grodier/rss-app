@@ -38,15 +38,16 @@ func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	feed := &models.Feed{
+		Title:       input.Title,
+		Description: input.Description,
+		URL:         input.URL,
+		SiteURL:     input.SiteURL,
+	}
+
 	v := validator.NewValidator()
 
-	v.Check(input.Title != "", "title", "must be provided")
-	v.Check(len(input.Title) <= 500, "title", "must not be more than 500 bytes long")
-	v.Check(input.Description != "", "description", "must be provided")
-	v.Check(input.URL != "", "url", "must be provided")
-	v.Check(input.SiteURL != "", "site_url", "must be provided")
-
-	if !v.Valid() {
+	if models.ValidateFeed(v, feed); !v.Valid() {
 		s.failedValidationResponse(w, r, v.Errors)
 		return
 	}
