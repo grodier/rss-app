@@ -11,6 +11,10 @@ import (
 type DB struct {
 	dsn string
 	db  *sql.DB
+
+	MaxOpenConnections int
+	MaxIdleConnections int
+	MaxIdleTime        time.Duration
 }
 
 func NewDB(dsn string) *DB {
@@ -23,6 +27,10 @@ func (pg *DB) Open() error {
 		return err
 	}
 	pg.db = db
+
+	pg.db.SetMaxOpenConns(pg.MaxOpenConnections)
+	pg.db.SetMaxIdleConns(pg.MaxIdleConnections)
+	pg.db.SetConnMaxIdleTime(pg.MaxIdleTime)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

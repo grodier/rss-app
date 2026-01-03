@@ -5,6 +5,7 @@ import (
 	"flag"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/grodier/rss-app/internal/pgsql"
 	"github.com/grodier/rss-app/internal/server"
@@ -25,13 +26,18 @@ func NewApplication(logger *slog.Logger) *Application {
 type config struct {
 	env    string
 	server serverConfig
-	db     struct {
-		dsn string
-	}
+	db     dbConfig
 }
 
 type serverConfig struct {
 	port int
+}
+
+type dbConfig struct {
+	dsn                string
+	maxOpenConnections int
+	maxIdleConnections int
+	maxIdleTime        time.Duration
 }
 
 func defaultConfig() config {
@@ -40,6 +46,12 @@ func defaultConfig() config {
 		server: serverConfig{
 			port: 8080,
 		},
+		db: dbConfig{
+			dsn:                os.Getenv("RSSAPP_DB_DSN"),
+			maxOpenConnections: 25,
+			maxIdleConnections: 25,
+			maxIdleTime:        15 * time.Minute,
+		},
 	}
 }
 
@@ -47,6 +59,9 @@ func (app *Application) Run(ctx context.Context, args []string) error {
 	app.config = app.ParseConfigs(args)
 
 	db := pgsql.NewDB(app.config.db.dsn)
+	db.MaxOpenConnections = app.config.db.maxOpenConnections
+	db.MaxIdleConnections = app.config.db.maxIdleConnections
+	db.MaxIdleTime = app.config.db.maxIdleTime
 	if err := db.Open(); err != nil {
 		return err
 	}
@@ -74,7 +89,10 @@ func (app *Application) ParseConfigs(args []string) config {
 	fs.StringVar(&config.env, "env", config.env, "Environment (development|production)")
 	fs.IntVar(&config.server.port, "port", config.server.port, "Server port")
 
-	fs.StringVar(&config.db.dsn, "db-dsn", os.Getenv("RSSAPP_DB_DSN"), "Database DSN")
+	fs.StringVar(&config.db.dsn, "db-dsn", config.db.dsn, "Database DSN")
+	fs.IntVar(&config.db.maxOpenConnections, "db-max-open-conns", config.db.maxOpenConnections, "Database max open connections")
+	fs.IntVar(&config.db.maxIdleConnections, "db-max-idle-conns", config.db.maxIdleConnections, "Database max idle connections")
+	fs.DurationVar(&config.db.maxIdleTime, "db-max-idle-time", config.db.maxIdleTime, "Database max idle time")
 
 	fs.Parse(args)
 
