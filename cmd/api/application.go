@@ -74,6 +74,8 @@ func (app *Application) Run(ctx context.Context, args []string) error {
 	srv.Env = app.config.env
 	srv.Version = version
 
+	srv.FeedService = pgsql.NewFeedService(db)
+
 	if err := srv.Serve(); err != nil {
 		return err
 	}

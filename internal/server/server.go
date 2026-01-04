@@ -10,12 +10,16 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/grodier/rss-app/internal/models"
 )
 
 type Server struct {
 	Port    int
 	Env     string
 	Version string
+
+	FeedService models.FeedService
 
 	server *http.Server
 	logger *slog.Logger
