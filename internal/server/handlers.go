@@ -52,7 +52,19 @@ func (s *Server) handleCreateFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, "%+v\n", input)
+	err = s.FeedService.Create(feed)
+	if err != nil {
+		s.serverErrorResponse(w, r, err)
+		return
+	}
+
+	headers := make(http.Header)
+	headers.Set("Location", fmt.Sprintf("/v1/feeds/%d", feed.ID))
+
+	err = s.writeJSON(w, http.StatusCreated, envelope{"feed": feed}, headers)
+	if err != nil {
+		s.serverErrorResponse(w, r, err)
+	}
 }
 
 func (s *Server) handleShowFeed(w http.ResponseWriter, r *http.Request) {
