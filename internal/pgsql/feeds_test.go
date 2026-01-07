@@ -177,3 +177,94 @@ func TestFeedService_Get_Errors(t *testing.T) {
 		})
 	}
 }
+
+func TestFeedService_Update(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	mock.ExpectExec(`UPDATE feeds SET .+ WHERE id = \$6`).
+		WithArgs("Updated Feed", "Updated description", "https://example.com/updated.xml", "https://example.com/updated", "es", int64(1)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	fs := NewFeedService(db)
+
+	feed := &models.Feed{
+		ID:          1,
+		Title:       "Updated Feed",
+		Description: "Updated description",
+		URL:         "https://example.com/updated.xml",
+		SiteURL:     "https://example.com/updated",
+		Language:    "es",
+	}
+
+	err = fs.Update(feed)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestFeedService_Update_Errors(t *testing.T) {
+	tests := []struct {
+		name         string
+		feedID       int64
+		mockError    error // nil means no DB call expected (invalid ID)
+		rowsAffected int64 // 0 means record not found
+		wantError    error
+	}{
+		{"invalid id zero", 0, nil, 0, ErrRecordNotFound},
+		{"invalid id negative", -1, nil, 0, ErrRecordNotFound},
+		{"record not found", 999, nil, 0, ErrRecordNotFound},
+		{"database error", 1, sqlmock.ErrCancelled, 0, sqlmock.ErrCancelled},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatalf("failed to create sqlmock: %v", err)
+			}
+			defer db.Close()
+
+			// Only set up mock expectation if ID is valid (DB call will be made)
+			if tt.feedID >= 1 {
+				if tt.mockError != nil {
+					mock.ExpectExec(`UPDATE feeds SET .+ WHERE id = \$6`).
+						WithArgs("Test Feed", "A test description", "https://example.com/feed.xml", "https://example.com", "en", tt.feedID).
+						WillReturnError(tt.mockError)
+				} else {
+					mock.ExpectExec(`UPDATE feeds SET .+ WHERE id = \$6`).
+						WithArgs("Test Feed", "A test description", "https://example.com/feed.xml", "https://example.com", "en", tt.feedID).
+						WillReturnResult(sqlmock.NewResult(0, tt.rowsAffected))
+				}
+			}
+
+			fs := NewFeedService(db)
+
+			feed := &models.Feed{
+				ID:          tt.feedID,
+				Title:       "Test Feed",
+				Description: "A test description",
+				URL:         "https://example.com/feed.xml",
+				SiteURL:     "https://example.com",
+				Language:    "en",
+			}
+
+			err = fs.Update(feed)
+
+			if err != tt.wantError {
+				t.Errorf("got error %v, want %v", err, tt.wantError)
+			}
+
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Errorf("unfulfilled expectations: %v", err)
+			}
+		})
+	}
+}

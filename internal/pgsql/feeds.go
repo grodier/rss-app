@@ -18,8 +18,7 @@ func (fs *FeedService) Create(feed *models.Feed) error {
 	query := `
     INSERT INTO feeds (title, description, url, site_url, language)
     VALUES ($1, $2, $3, $4, $5)
-    RETURNING id, created_at
-  `
+    RETURNING id, created_at`
 
 	args := []any{feed.Title, feed.Description, feed.URL, feed.SiteURL, feed.Language}
 
@@ -34,8 +33,7 @@ func (fs *FeedService) Get(id int64) (*models.Feed, error) {
 	query := `
     SELECT id, title, description, url, site_url, language, created_at
     FROM feeds
-    WHERE id = $1
-  `
+    WHERE id = $1`
 
 	var feed models.Feed
 
@@ -62,6 +60,38 @@ func (fs *FeedService) Get(id int64) (*models.Feed, error) {
 }
 
 func (fs *FeedService) Update(feed *models.Feed) error {
+	if feed.ID < 1 {
+		return ErrRecordNotFound
+	}
+
+	query := `
+    UPDATE feeds
+    SET title = $1, description = $2, url = $3, site_url = $4, language = $5
+    WHERE id = $6`
+
+	args := []any{
+		feed.Title,
+		feed.Description,
+		feed.URL,
+		feed.SiteURL,
+		feed.Language,
+		feed.ID,
+	}
+
+	result, err := fs.db.Exec(query, args...)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return ErrRecordNotFound
+	}
+
 	return nil
 }
 
