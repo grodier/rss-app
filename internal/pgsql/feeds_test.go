@@ -92,8 +92,8 @@ func TestFeedService_Get(t *testing.T) {
 	expectedID := int64(1)
 	expectedCreatedAt := time.Now()
 
-	rows := sqlmock.NewRows([]string{"id", "title", "description", "url", "site_url", "created_at", "language"}).
-		AddRow(expectedID, "Test Feed", "A test description", "https://example.com/feed.xml", "https://example.com", expectedCreatedAt, "en")
+	rows := sqlmock.NewRows([]string{"id", "title", "description", "url", "site_url", "language", "created_at"}).
+		AddRow(expectedID, "Test Feed", "A test description", "https://example.com/feed.xml", "https://example.com", "en", expectedCreatedAt)
 
 	mock.ExpectQuery(`SELECT .+ FROM feeds WHERE id = \$1`).
 		WithArgs(expectedID).
