@@ -82,6 +82,7 @@ func (s *Server) handleShowFeed(w http.ResponseWriter, r *http.Request) {
 		default:
 			s.serverErrorResponse(w, r, err)
 		}
+		return
 	}
 
 	err = s.writeJSON(w, http.StatusOK, envelope{"feed": feed}, nil)
