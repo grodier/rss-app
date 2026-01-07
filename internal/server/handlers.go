@@ -3,9 +3,9 @@ package server
 import (
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/grodier/rss-app/internal/models"
+	"github.com/grodier/rss-app/internal/pgsql"
 	"github.com/grodier/rss-app/internal/validator"
 )
 
@@ -74,13 +74,15 @@ func (s *Server) handleShowFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	feed := models.Feed{
-		ID:          id,
-		Title:       "Test Site",
-		Description: "Description for a test feed",
-		URL:         "https://test.com/rss.xml",
-		SiteURL:     "https://test.com/",
-		CreatedAt:   time.Now(),
+	feed, err := s.FeedService.Get(id)
+	if err != nil {
+		switch {
+		case err == pgsql.ErrRecordNotFound:
+			s.notFoundResponse(w, r)
+		default:
+			s.serverErrorResponse(w, r, err)
+		}
+		return
 	}
 
 	err = s.writeJSON(w, http.StatusOK, envelope{"feed": feed}, nil)

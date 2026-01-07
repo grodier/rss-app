@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/grodier/rss-app/internal/models"
+	"github.com/grodier/rss-app/internal/pgsql"
 )
 
 // validFeedBody is a shared test fixture for valid feed creation requests
@@ -308,40 +309,82 @@ func TestHandleCreateFeed_ServiceError(t *testing.T) {
 	}
 }
 
-func TestHandleShowFeed(t *testing.T) {
-	tests := []struct {
-		name             string
-		id               string
-		expectedStatus   int
-		expectedResponse map[string]any
-	}{
-		{
-			name:           "valid id",
-			id:             "1",
-			expectedStatus: http.StatusOK,
-			expectedResponse: map[string]any{
-				"id":          float64(1),
-				"title":       "Test Site",
-				"description": "Description for a test feed",
-				"url":         "https://test.com/rss.xml",
-				"site_url":    "https://test.com/",
+func TestHandleShowFeed_Success(t *testing.T) {
+	expectedFeed := &models.Feed{
+		ID:          1,
+		Title:       "Test Feed",
+		Description: "A test description",
+		URL:         "https://example.com/feed.xml",
+		SiteURL:     "https://example.com",
+		Language:    "en",
+	}
+
+	s := newTestServer(&testServerOptions{
+		feedService: &mockFeedService{
+			getFn: func(id int64) (*models.Feed, error) {
+				if id != 1 {
+					t.Errorf("unexpected id: got %d, want 1", id)
+				}
+				return expectedFeed, nil
 			},
 		},
-		{
-			name:           "non-integer id",
-			id:             "abc",
-			expectedStatus: http.StatusNotFound,
-		},
-		{
-			name:           "id less than 1",
-			id:             "0",
-			expectedStatus: http.StatusNotFound,
-		},
-		{
-			name:           "negative id",
-			id:             "-5",
-			expectedStatus: http.StatusNotFound,
-		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/feeds/1", nil)
+	rr := httptest.NewRecorder()
+
+	s.router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Errorf("got Content-Type %q, want %q", got, "application/json")
+	}
+
+	var envelope struct {
+		Feed struct {
+			ID          int    `json:"id"`
+			Title       string `json:"title"`
+			Description string `json:"description"`
+			URL         string `json:"url"`
+			SiteURL     string `json:"site_url"`
+			Language    string `json:"language"`
+		} `json:"feed"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if envelope.Feed.ID != 1 {
+		t.Errorf("got id %d, want 1", envelope.Feed.ID)
+	}
+	if envelope.Feed.Title != "Test Feed" {
+		t.Errorf("got title %q, want %q", envelope.Feed.Title, "Test Feed")
+	}
+	if envelope.Feed.Description != "A test description" {
+		t.Errorf("got description %q, want %q", envelope.Feed.Description, "A test description")
+	}
+	if envelope.Feed.URL != "https://example.com/feed.xml" {
+		t.Errorf("got url %q, want %q", envelope.Feed.URL, "https://example.com/feed.xml")
+	}
+	if envelope.Feed.SiteURL != "https://example.com" {
+		t.Errorf("got site_url %q, want %q", envelope.Feed.SiteURL, "https://example.com")
+	}
+	if envelope.Feed.Language != "en" {
+		t.Errorf("got language %q, want %q", envelope.Feed.Language, "en")
+	}
+}
+
+func TestHandleShowFeed_InvalidID(t *testing.T) {
+	tests := []struct {
+		name string
+		id   string
+	}{
+		{"non-integer", "abc"},
+		{"zero", "0"},
+		{"negative", "-5"},
 	}
 
 	for _, tt := range tests {
@@ -351,42 +394,49 @@ func TestHandleShowFeed(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/v1/feeds/"+tt.id, nil)
 			rr := httptest.NewRecorder()
 
-			// Use the router to properly handle URL parameters
-			handler := s.router()
-			handler.ServeHTTP(rr, req)
+			s.router().ServeHTTP(rr, req)
 
-			if status := rr.Code; status != tt.expectedStatus {
-				t.Errorf("handler returned wrong status code: got %v want %v", status, tt.expectedStatus)
-			}
-
-			// For valid responses, check JSON structure
-			if tt.expectedStatus == http.StatusOK && tt.expectedResponse != nil {
-				// Assert the Content-Type header
-				contentType := rr.Header().Get("Content-Type")
-				if contentType != "application/json" {
-					t.Errorf("handler returned wrong content type: got %v want %v", contentType, "application/json")
-				}
-
-				// Parse the envelope
-				var envelope map[string]any
-				err := json.Unmarshal(rr.Body.Bytes(), &envelope)
-				if err != nil {
-					t.Fatalf("failed to unmarshal response: %v", err)
-				}
-
-				// Extract the feed from the envelope
-				feed, ok := envelope["feed"].(map[string]any)
-				if !ok {
-					t.Fatal("expected feed to be a map in the envelope")
-				}
-
-				// Check all expected fields
-				for key, expectedValue := range tt.expectedResponse {
-					if feed[key] != expectedValue {
-						t.Errorf("expected %s to be %v, got %v", key, expectedValue, feed[key])
-					}
-				}
+			if rr.Code != http.StatusNotFound {
+				t.Errorf("got status %d, want %d", rr.Code, http.StatusNotFound)
 			}
 		})
+	}
+}
+
+func TestHandleShowFeed_NotFound(t *testing.T) {
+	s := newTestServer(&testServerOptions{
+		feedService: &mockFeedService{
+			getFn: func(id int64) (*models.Feed, error) {
+				return nil, pgsql.ErrRecordNotFound
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/feeds/999", nil)
+	rr := httptest.NewRecorder()
+
+	s.router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusNotFound)
+	}
+}
+
+func TestHandleShowFeed_ServiceError(t *testing.T) {
+	s := newTestServer(&testServerOptions{
+		feedService: &mockFeedService{
+			getFn: func(id int64) (*models.Feed, error) {
+				return nil, errors.New("database connection failed")
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/feeds/1", nil)
+	rr := httptest.NewRecorder()
+
+	s.router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusInternalServerError)
 	}
 }
