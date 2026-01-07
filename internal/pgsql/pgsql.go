@@ -3,6 +3,7 @@ package pgsql
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -21,6 +22,10 @@ type DBTX interface {
 
 // Verify DB implements DBTX at compile time.
 var _ DBTX = (*DB)(nil)
+
+var (
+	ErrRecordNotFound = errors.New("record not found")
+)
 
 type DB struct {
 	dsn string
