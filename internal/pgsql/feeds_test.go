@@ -268,3 +268,76 @@ func TestFeedService_Update_Errors(t *testing.T) {
 		})
 	}
 }
+
+func TestFeedService_Delete(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("failed to create sqlmock: %v", err)
+	}
+	defer db.Close()
+
+	mock.ExpectExec(`DELETE FROM feeds WHERE id = \$1`).
+		WithArgs(int64(1)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	fs := NewFeedService(db)
+
+	err = fs.Delete(1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unfulfilled expectations: %v", err)
+	}
+}
+
+func TestFeedService_Delete_Errors(t *testing.T) {
+	tests := []struct {
+		name         string
+		id           int64
+		mockError    error // nil means no DB call expected (invalid ID)
+		rowsAffected int64 // 0 means record not found
+		wantError    error
+	}{
+		{"invalid id zero", 0, nil, 0, ErrRecordNotFound},
+		{"invalid id negative", -1, nil, 0, ErrRecordNotFound},
+		{"record not found", 999, nil, 0, ErrRecordNotFound},
+		{"database error", 1, sqlmock.ErrCancelled, 0, sqlmock.ErrCancelled},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatalf("failed to create sqlmock: %v", err)
+			}
+			defer db.Close()
+
+			// Only set up mock expectation if ID is valid (DB call will be made)
+			if tt.id >= 1 {
+				if tt.mockError != nil {
+					mock.ExpectExec(`DELETE FROM feeds WHERE id = \$1`).
+						WithArgs(tt.id).
+						WillReturnError(tt.mockError)
+				} else {
+					mock.ExpectExec(`DELETE FROM feeds WHERE id = \$1`).
+						WithArgs(tt.id).
+						WillReturnResult(sqlmock.NewResult(0, tt.rowsAffected))
+				}
+			}
+
+			fs := NewFeedService(db)
+
+			err = fs.Delete(tt.id)
+
+			if err != tt.wantError {
+				t.Errorf("got error %v, want %v", err, tt.wantError)
+			}
+
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Errorf("unfulfilled expectations: %v", err)
+			}
+		})
+	}
+}
