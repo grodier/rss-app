@@ -440,3 +440,346 @@ func TestHandleShowFeed_ServiceError(t *testing.T) {
 		t.Errorf("got status %d, want %d", rr.Code, http.StatusInternalServerError)
 	}
 }
+
+// validUpdateFeedBody is a shared test fixture for valid feed update requests
+var validUpdateFeedBody = `{
+	"title": "Updated Title",
+	"description": "Updated description",
+	"url": "https://updated.com/feed.xml",
+	"site_url": "https://updated.com"
+}`
+
+func TestHandleUpdateFeed_Success(t *testing.T) {
+	existingFeed := &models.Feed{
+		ID:          1,
+		Title:       "Original Title",
+		Description: "Original description",
+		URL:         "https://example.com/feed.xml",
+		SiteURL:     "https://example.com",
+	}
+
+	s := newTestServer(&testServerOptions{
+		feedService: &mockFeedService{
+			getFn: func(id int64) (*models.Feed, error) {
+				if id != 1 {
+					t.Errorf("unexpected id: got %d, want 1", id)
+				}
+				// Return a copy to simulate database behavior
+				feed := *existingFeed
+				return &feed, nil
+			},
+			updateFn: func(feed *models.Feed) error {
+				// Verify the feed has been updated with new values
+				if feed.Title != "Updated Title" {
+					t.Errorf("expected title to be updated, got %q", feed.Title)
+				}
+				if feed.Description != "Updated description" {
+					t.Errorf("expected description to be updated, got %q", feed.Description)
+				}
+				if feed.URL != "https://updated.com/feed.xml" {
+					t.Errorf("expected URL to be updated, got %q", feed.URL)
+				}
+				if feed.SiteURL != "https://updated.com" {
+					t.Errorf("expected SiteURL to be updated, got %q", feed.SiteURL)
+				}
+				return nil
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPut, "/v1/feeds/1", strings.NewReader(validUpdateFeedBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	s.router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Errorf("got Content-Type %q, want %q", got, "application/json")
+	}
+
+	var envelope struct {
+		Feed struct {
+			ID          int    `json:"id"`
+			Title       string `json:"title"`
+			Description string `json:"description"`
+			URL         string `json:"url"`
+			SiteURL     string `json:"site_url"`
+		} `json:"feed"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if envelope.Feed.ID != 1 {
+		t.Errorf("got id %d, want 1", envelope.Feed.ID)
+	}
+	if envelope.Feed.Title != "Updated Title" {
+		t.Errorf("got title %q, want %q", envelope.Feed.Title, "Updated Title")
+	}
+	if envelope.Feed.Description != "Updated description" {
+		t.Errorf("got description %q, want %q", envelope.Feed.Description, "Updated description")
+	}
+}
+
+func TestHandleUpdateFeed_InvalidID(t *testing.T) {
+	tests := []struct {
+		name string
+		id   string
+	}{
+		{"non-integer", "abc"},
+		{"zero", "0"},
+		{"negative", "-5"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestServer(nil)
+
+			req := httptest.NewRequest(http.MethodPut, "/v1/feeds/"+tt.id, strings.NewReader(validUpdateFeedBody))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+
+			s.router().ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusNotFound {
+				t.Errorf("got status %d, want %d", rr.Code, http.StatusNotFound)
+			}
+		})
+	}
+}
+
+func TestHandleUpdateFeed_NotFound(t *testing.T) {
+	s := newTestServer(&testServerOptions{
+		feedService: &mockFeedService{
+			getFn: func(id int64) (*models.Feed, error) {
+				return nil, pgsql.ErrRecordNotFound
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPut, "/v1/feeds/999", strings.NewReader(validUpdateFeedBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	s.router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusNotFound)
+	}
+}
+
+func TestHandleUpdateFeed_JSONParsingErrors(t *testing.T) {
+	existingFeed := &models.Feed{
+		ID:          1,
+		Title:       "Original Title",
+		Description: "Original description",
+		URL:         "https://example.com/feed.xml",
+		SiteURL:     "https://example.com",
+	}
+
+	tests := []struct {
+		name      string
+		body      string
+		wantError string
+	}{
+		{"empty body", "", "body must not be empty"},
+		{"wrong type for field", `{"title": 123}`, `body contains incorrect JSON type for field "title"`},
+		{"array instead of object", `["foo", "bar"]`, "body contains incorrect JSON type (at character 1)"},
+		{"malformed json", `{"title": "Updated", }`, "body contains badly-formed JSON (at character 22)"},
+		{"unknown field", `{"title": "Updated", "unknown_field": "value"}`, `body contains unknown key "unknown_field"`},
+		{"multiple json values", `{"title": "Updated"} {"description": "Another"}`, "body must only contain a single JSON value"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestServer(&testServerOptions{
+				feedService: &mockFeedService{
+					getFn: func(id int64) (*models.Feed, error) {
+						feed := *existingFeed
+						return &feed, nil
+					},
+				},
+			})
+
+			req := httptest.NewRequest(http.MethodPut, "/v1/feeds/1", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+
+			s.router().ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusBadRequest {
+				t.Errorf("got status %d, want %d", rr.Code, http.StatusBadRequest)
+			}
+
+			var resp struct {
+				Error string `json:"error"`
+			}
+			if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to parse response: %v", err)
+			}
+			if resp.Error != tt.wantError {
+				t.Errorf("got error %q, want %q", resp.Error, tt.wantError)
+			}
+		})
+	}
+}
+
+func TestHandleUpdateFeed_ValidationErrors(t *testing.T) {
+	existingFeed := &models.Feed{
+		ID:          1,
+		Title:       "Original Title",
+		Description: "Original description",
+		URL:         "https://example.com/feed.xml",
+		SiteURL:     "https://example.com",
+	}
+
+	tests := []struct {
+		name       string
+		body       string
+		wantErrors map[string]string
+	}{
+		{
+			name:       "empty title",
+			body:       `{"title": "", "description": "Valid description", "url": "https://example.com/feed.xml", "site_url": "https://example.com"}`,
+			wantErrors: map[string]string{"title": "must be provided"},
+		},
+		{
+			name:       "title too long",
+			body:       `{"title": "` + strings.Repeat("a", 501) + `", "description": "Valid description", "url": "https://example.com/feed.xml", "site_url": "https://example.com"}`,
+			wantErrors: map[string]string{"title": "must not be more than 500 bytes long"},
+		},
+		{
+			name:       "empty description",
+			body:       `{"title": "Valid Title", "description": "", "url": "https://example.com/feed.xml", "site_url": "https://example.com"}`,
+			wantErrors: map[string]string{"description": "must be provided"},
+		},
+		{
+			name:       "empty url",
+			body:       `{"title": "Valid Title", "description": "Valid description", "url": "", "site_url": "https://example.com"}`,
+			wantErrors: map[string]string{"url": "must be provided"},
+		},
+		{
+			name:       "empty site_url",
+			body:       `{"title": "Valid Title", "description": "Valid description", "url": "https://example.com/feed.xml", "site_url": ""}`,
+			wantErrors: map[string]string{"site_url": "must be provided"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestServer(&testServerOptions{
+				feedService: &mockFeedService{
+					getFn: func(id int64) (*models.Feed, error) {
+						feed := *existingFeed
+						return &feed, nil
+					},
+				},
+			})
+
+			req := httptest.NewRequest(http.MethodPut, "/v1/feeds/1", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+
+			s.router().ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusUnprocessableEntity {
+				t.Errorf("got status %d, want %d", rr.Code, http.StatusUnprocessableEntity)
+			}
+
+			var resp struct {
+				Error map[string]string `json:"error"`
+			}
+			if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to parse response: %v", err)
+			}
+
+			for field, wantMsg := range tt.wantErrors {
+				if resp.Error[field] != wantMsg {
+					t.Errorf("field %q: got %q, want %q", field, resp.Error[field], wantMsg)
+				}
+			}
+
+			if len(resp.Error) != len(tt.wantErrors) {
+				t.Errorf("got %d errors, want %d", len(resp.Error), len(tt.wantErrors))
+			}
+		})
+	}
+}
+
+func TestHandleUpdateFeed_GetServiceError(t *testing.T) {
+	s := newTestServer(&testServerOptions{
+		feedService: &mockFeedService{
+			getFn: func(id int64) (*models.Feed, error) {
+				return nil, errors.New("database connection failed")
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPut, "/v1/feeds/1", strings.NewReader(validUpdateFeedBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	s.router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusInternalServerError)
+	}
+
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	wantError := "the server encountered a problem and could not process your request"
+	if resp.Error != wantError {
+		t.Errorf("got error %q, want %q", resp.Error, wantError)
+	}
+}
+
+func TestHandleUpdateFeed_UpdateServiceError(t *testing.T) {
+	existingFeed := &models.Feed{
+		ID:          1,
+		Title:       "Original Title",
+		Description: "Original description",
+		URL:         "https://example.com/feed.xml",
+		SiteURL:     "https://example.com",
+	}
+
+	s := newTestServer(&testServerOptions{
+		feedService: &mockFeedService{
+			getFn: func(id int64) (*models.Feed, error) {
+				feed := *existingFeed
+				return &feed, nil
+			},
+			updateFn: func(feed *models.Feed) error {
+				return errors.New("database connection failed")
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPut, "/v1/feeds/1", strings.NewReader(validUpdateFeedBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	s.router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusInternalServerError)
+	}
+
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	wantError := "the server encountered a problem and could not process your request"
+	if resp.Error != wantError {
+		t.Errorf("got error %q, want %q", resp.Error, wantError)
+	}
+}

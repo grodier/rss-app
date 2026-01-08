@@ -90,3 +90,60 @@ func (s *Server) handleShowFeed(w http.ResponseWriter, r *http.Request) {
 		s.serverErrorResponse(w, r, err)
 	}
 }
+
+func (s *Server) handleUpdateFeed(w http.ResponseWriter, r *http.Request) {
+	id, err := s.readIDParam(r)
+	if err != nil {
+		s.notFoundResponse(w, r)
+		return
+	}
+
+	feed, err := s.FeedService.Get(id)
+	if err != nil {
+		switch {
+		case err == pgsql.ErrRecordNotFound:
+			s.notFoundResponse(w, r)
+		default:
+			s.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	var input struct {
+		Title       string `json:"title"`
+		Description string `json:"description"`
+		URL         string `json:"url"`
+		SiteURL     string `json:"site_url"`
+		Language    string `json:"language"`
+	}
+
+	err = s.readJSON(w, r, &input)
+	if err != nil {
+		s.badRequestResponse(w, r, err)
+		return
+	}
+
+	feed.Title = input.Title
+	feed.Description = input.Description
+	feed.URL = input.URL
+	feed.SiteURL = input.SiteURL
+	feed.Language = input.Language
+
+	v := validator.NewValidator()
+
+	if models.ValidateFeed(v, feed); !v.Valid() {
+		s.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	err = s.FeedService.Update(feed)
+	if err != nil {
+		s.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = s.writeJSON(w, http.StatusOK, envelope{"feed": feed}, nil)
+	if err != nil {
+		s.serverErrorResponse(w, r, err)
+	}
+}
