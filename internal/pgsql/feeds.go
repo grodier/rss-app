@@ -1,7 +1,9 @@
 package pgsql
 
 import (
+	"context"
 	"database/sql"
+	"time"
 
 	"github.com/grodier/rss-app/internal/models"
 )
@@ -22,7 +24,10 @@ func (fs *FeedService) Create(feed *models.Feed) error {
 
 	args := []any{feed.Title, feed.Description, feed.URL, feed.SiteURL, feed.Language}
 
-	return fs.db.QueryRow(query, args...).Scan(&feed.ID, &feed.CreatedAt)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	return fs.db.QueryRowContext(ctx, query, args...).Scan(&feed.ID, &feed.CreatedAt)
 }
 
 func (fs *FeedService) Get(id int64) (*models.Feed, error) {
@@ -37,7 +42,10 @@ func (fs *FeedService) Get(id int64) (*models.Feed, error) {
 
 	var feed models.Feed
 
-	err := fs.db.QueryRow(query, id).Scan(
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := fs.db.QueryRowContext(ctx, query, id).Scan(
 		&feed.ID,
 		&feed.Title,
 		&feed.Description,
@@ -78,7 +86,10 @@ func (fs *FeedService) Update(feed *models.Feed) error {
 		feed.ID,
 	}
 
-	result, err := fs.db.Exec(query, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	result, err := fs.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -104,7 +115,10 @@ func (fs *FeedService) Delete(id int64) error {
         DELETE FROM feeds
         WHERE id = $1`
 
-	result, err := fs.db.Exec(query, id)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	result, err := fs.db.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
 	}
