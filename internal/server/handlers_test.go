@@ -783,3 +783,115 @@ func TestHandleUpdateFeed_UpdateServiceError(t *testing.T) {
 		t.Errorf("got error %q, want %q", resp.Error, wantError)
 	}
 }
+
+func TestHandleDeleteFeed_Success(t *testing.T) {
+	s := newTestServer(&testServerOptions{
+		feedService: &mockFeedService{
+			deleteFn: func(id int64) error {
+				if id != 1 {
+					t.Errorf("unexpected id: got %d, want 1", id)
+				}
+				return nil
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/feeds/1", nil)
+	rr := httptest.NewRecorder()
+
+	s.router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Errorf("got Content-Type %q, want %q", got, "application/json")
+	}
+
+	var envelope struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if envelope.Message != "feed successfully deleted" {
+		t.Errorf("got message %q, want %q", envelope.Message, "feed successfully deleted")
+	}
+}
+
+func TestHandleDeleteFeed_InvalidID(t *testing.T) {
+	tests := []struct {
+		name string
+		id   string
+	}{
+		{"non-integer", "abc"},
+		{"zero", "0"},
+		{"negative", "-5"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestServer(nil)
+
+			req := httptest.NewRequest(http.MethodDelete, "/v1/feeds/"+tt.id, nil)
+			rr := httptest.NewRecorder()
+
+			s.router().ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusNotFound {
+				t.Errorf("got status %d, want %d", rr.Code, http.StatusNotFound)
+			}
+		})
+	}
+}
+
+func TestHandleDeleteFeed_NotFound(t *testing.T) {
+	s := newTestServer(&testServerOptions{
+		feedService: &mockFeedService{
+			deleteFn: func(id int64) error {
+				return pgsql.ErrRecordNotFound
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/feeds/999", nil)
+	rr := httptest.NewRecorder()
+
+	s.router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusNotFound)
+	}
+}
+
+func TestHandleDeleteFeed_ServiceError(t *testing.T) {
+	s := newTestServer(&testServerOptions{
+		feedService: &mockFeedService{
+			deleteFn: func(id int64) error {
+				return errors.New("database connection failed")
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/feeds/1", nil)
+	rr := httptest.NewRecorder()
+
+	s.router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusInternalServerError)
+	}
+
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	wantError := "the server encountered a problem and could not process your request"
+	if resp.Error != wantError {
+		t.Errorf("got error %q, want %q", resp.Error, wantError)
+	}
+}

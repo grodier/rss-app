@@ -15,9 +15,11 @@ func (s *Server) router() http.Handler {
 	router.MethodNotAllowed(s.methodNotAllowedResponse)
 
 	router.Get("/v1/healthcheck", s.handleHealthcheck)
+
 	router.Post("/v1/admin/feeds", s.handleCreateFeed)
 	router.Get("/v1/feeds/{id}", s.handleShowFeed)
 	router.Put("/v1/feeds/{id}", s.handleUpdateFeed)
+	router.Delete("/v1/feeds/{id}", s.handleDeleteFeed)
 
 	return router
 }

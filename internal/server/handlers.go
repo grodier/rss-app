@@ -147,3 +147,27 @@ func (s *Server) handleUpdateFeed(w http.ResponseWriter, r *http.Request) {
 		s.serverErrorResponse(w, r, err)
 	}
 }
+
+func (s *Server) handleDeleteFeed(w http.ResponseWriter, r *http.Request) {
+	id, err := s.readIDParam(r)
+	if err != nil {
+		s.notFoundResponse(w, r)
+		return
+	}
+
+	err = s.FeedService.Delete(id)
+	if err != nil {
+		switch {
+		case err == pgsql.ErrRecordNotFound:
+			s.notFoundResponse(w, r)
+		default:
+			s.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = s.writeJSON(w, http.StatusOK, envelope{"message": "feed successfully deleted"}, nil)
+	if err != nil {
+		s.serverErrorResponse(w, r, err)
+	}
+}
