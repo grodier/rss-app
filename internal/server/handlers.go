@@ -110,11 +110,11 @@ func (s *Server) handleUpdateFeed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input struct {
-		Title       string `json:"title"`
-		Description string `json:"description"`
-		URL         string `json:"url"`
-		SiteURL     string `json:"site_url"`
-		Language    string `json:"language"`
+		Title       *string `json:"title"`
+		Description *string `json:"description"`
+		URL         *string `json:"url"`
+		SiteURL     *string `json:"site_url"`
+		Language    *string `json:"language"`
 	}
 
 	err = s.readJSON(w, r, &input)
@@ -123,11 +123,25 @@ func (s *Server) handleUpdateFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	feed.Title = input.Title
-	feed.Description = input.Description
-	feed.URL = input.URL
-	feed.SiteURL = input.SiteURL
-	feed.Language = input.Language
+	if input.Title != nil {
+		feed.Title = *input.Title
+	}
+
+	if input.Description != nil {
+		feed.Description = *input.Description
+	}
+
+	if input.URL != nil {
+		feed.URL = *input.URL
+	}
+
+	if input.SiteURL != nil {
+		feed.SiteURL = *input.SiteURL
+	}
+
+	if input.Language != nil {
+		feed.Language = *input.Language
+	}
 
 	v := validator.NewValidator()
 

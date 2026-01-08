@@ -441,12 +441,10 @@ func TestHandleShowFeed_ServiceError(t *testing.T) {
 	}
 }
 
-// validUpdateFeedBody is a shared test fixture for valid feed update requests
+// validUpdateFeedBody is a shared test fixture for valid partial feed update requests
 var validUpdateFeedBody = `{
 	"title": "Updated Title",
-	"description": "Updated description",
-	"url": "https://updated.com/feed.xml",
-	"site_url": "https://updated.com"
+	"description": "Updated description"
 }`
 
 func TestHandleUpdateFeed_Success(t *testing.T) {
@@ -476,18 +474,19 @@ func TestHandleUpdateFeed_Success(t *testing.T) {
 				if feed.Description != "Updated description" {
 					t.Errorf("expected description to be updated, got %q", feed.Description)
 				}
-				if feed.URL != "https://updated.com/feed.xml" {
-					t.Errorf("expected URL to be updated, got %q", feed.URL)
+				// Original values should be preserved (partial update)
+				if feed.URL != "https://example.com/feed.xml" {
+					t.Errorf("expected URL to be preserved, got %q", feed.URL)
 				}
-				if feed.SiteURL != "https://updated.com" {
-					t.Errorf("expected SiteURL to be updated, got %q", feed.SiteURL)
+				if feed.SiteURL != "https://example.com" {
+					t.Errorf("expected SiteURL to be preserved, got %q", feed.SiteURL)
 				}
 				return nil
 			},
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPut, "/v1/feeds/1", strings.NewReader(validUpdateFeedBody))
+	req := httptest.NewRequest(http.MethodPatch, "/v1/feeds/1", strings.NewReader(validUpdateFeedBody))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
@@ -539,7 +538,7 @@ func TestHandleUpdateFeed_InvalidID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := newTestServer(nil)
 
-			req := httptest.NewRequest(http.MethodPut, "/v1/feeds/"+tt.id, strings.NewReader(validUpdateFeedBody))
+			req := httptest.NewRequest(http.MethodPatch, "/v1/feeds/"+tt.id, strings.NewReader(validUpdateFeedBody))
 			req.Header.Set("Content-Type", "application/json")
 			rr := httptest.NewRecorder()
 
@@ -561,7 +560,7 @@ func TestHandleUpdateFeed_NotFound(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPut, "/v1/feeds/999", strings.NewReader(validUpdateFeedBody))
+	req := httptest.NewRequest(http.MethodPatch, "/v1/feeds/999", strings.NewReader(validUpdateFeedBody))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
@@ -605,7 +604,7 @@ func TestHandleUpdateFeed_JSONParsingErrors(t *testing.T) {
 				},
 			})
 
-			req := httptest.NewRequest(http.MethodPut, "/v1/feeds/1", strings.NewReader(tt.body))
+			req := httptest.NewRequest(http.MethodPatch, "/v1/feeds/1", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			rr := httptest.NewRecorder()
 
@@ -644,27 +643,27 @@ func TestHandleUpdateFeed_ValidationErrors(t *testing.T) {
 	}{
 		{
 			name:       "empty title",
-			body:       `{"title": "", "description": "Valid description", "url": "https://example.com/feed.xml", "site_url": "https://example.com"}`,
+			body:       `{"title": ""}`,
 			wantErrors: map[string]string{"title": "must be provided"},
 		},
 		{
 			name:       "title too long",
-			body:       `{"title": "` + strings.Repeat("a", 501) + `", "description": "Valid description", "url": "https://example.com/feed.xml", "site_url": "https://example.com"}`,
+			body:       `{"title": "` + strings.Repeat("a", 501) + `"}`,
 			wantErrors: map[string]string{"title": "must not be more than 500 bytes long"},
 		},
 		{
 			name:       "empty description",
-			body:       `{"title": "Valid Title", "description": "", "url": "https://example.com/feed.xml", "site_url": "https://example.com"}`,
+			body:       `{"description": ""}`,
 			wantErrors: map[string]string{"description": "must be provided"},
 		},
 		{
 			name:       "empty url",
-			body:       `{"title": "Valid Title", "description": "Valid description", "url": "", "site_url": "https://example.com"}`,
+			body:       `{"url": ""}`,
 			wantErrors: map[string]string{"url": "must be provided"},
 		},
 		{
 			name:       "empty site_url",
-			body:       `{"title": "Valid Title", "description": "Valid description", "url": "https://example.com/feed.xml", "site_url": ""}`,
+			body:       `{"site_url": ""}`,
 			wantErrors: map[string]string{"site_url": "must be provided"},
 		},
 	}
@@ -680,7 +679,7 @@ func TestHandleUpdateFeed_ValidationErrors(t *testing.T) {
 				},
 			})
 
-			req := httptest.NewRequest(http.MethodPut, "/v1/feeds/1", strings.NewReader(tt.body))
+			req := httptest.NewRequest(http.MethodPatch, "/v1/feeds/1", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			rr := httptest.NewRecorder()
 
@@ -719,7 +718,7 @@ func TestHandleUpdateFeed_GetServiceError(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPut, "/v1/feeds/1", strings.NewReader(validUpdateFeedBody))
+	req := httptest.NewRequest(http.MethodPatch, "/v1/feeds/1", strings.NewReader(validUpdateFeedBody))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
@@ -762,7 +761,7 @@ func TestHandleUpdateFeed_UpdateServiceError(t *testing.T) {
 		},
 	})
 
-	req := httptest.NewRequest(http.MethodPut, "/v1/feeds/1", strings.NewReader(validUpdateFeedBody))
+	req := httptest.NewRequest(http.MethodPatch, "/v1/feeds/1", strings.NewReader(validUpdateFeedBody))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
