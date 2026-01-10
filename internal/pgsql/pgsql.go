@@ -25,6 +25,7 @@ var _ DBTX = (*DB)(nil)
 
 var (
 	ErrRecordNotFound = errors.New("record not found")
+	ErrEditConflict   = errors.New("edit conflict")
 )
 
 type DB struct {

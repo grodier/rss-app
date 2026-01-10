@@ -454,6 +454,7 @@ func TestHandleUpdateFeed_Success(t *testing.T) {
 		Description: "Original description",
 		URL:         "https://example.com/feed.xml",
 		SiteURL:     "https://example.com",
+		Version:     1,
 	}
 
 	s := newTestServer(&testServerOptions{
@@ -747,6 +748,7 @@ func TestHandleUpdateFeed_UpdateServiceError(t *testing.T) {
 		Description: "Original description",
 		URL:         "https://example.com/feed.xml",
 		SiteURL:     "https://example.com",
+		Version:     1,
 	}
 
 	s := newTestServer(&testServerOptions{
@@ -778,6 +780,50 @@ func TestHandleUpdateFeed_UpdateServiceError(t *testing.T) {
 		t.Fatalf("failed to parse response: %v", err)
 	}
 	wantError := "the server encountered a problem and could not process your request"
+	if resp.Error != wantError {
+		t.Errorf("got error %q, want %q", resp.Error, wantError)
+	}
+}
+
+func TestHandleUpdateFeed_EditConflict(t *testing.T) {
+	existingFeed := &models.Feed{
+		ID:          1,
+		Title:       "Original Title",
+		Description: "Original description",
+		URL:         "https://example.com/feed.xml",
+		SiteURL:     "https://example.com",
+		Version:     1,
+	}
+
+	s := newTestServer(&testServerOptions{
+		feedService: &mockFeedService{
+			getFn: func(id int64) (*models.Feed, error) {
+				feed := *existingFeed
+				return &feed, nil
+			},
+			updateFn: func(feed *models.Feed) error {
+				return pgsql.ErrEditConflict
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/feeds/1", strings.NewReader(validUpdateFeedBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	s.router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusConflict {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusConflict)
+	}
+
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	wantError := "unable to update the record due to an edit conflict, please try again"
 	if resp.Error != wantError {
 		t.Errorf("got error %q, want %q", resp.Error, wantError)
 	}

@@ -152,7 +152,12 @@ func (s *Server) handleUpdateFeed(w http.ResponseWriter, r *http.Request) {
 
 	err = s.FeedService.Update(feed)
 	if err != nil {
-		s.serverErrorResponse(w, r, err)
+		switch {
+		case err == pgsql.ErrEditConflict:
+			s.editConflictResponse(w, r)
+		default:
+			s.serverErrorResponse(w, r, err)
+		}
 		return
 	}
 

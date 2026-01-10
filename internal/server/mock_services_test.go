@@ -19,9 +19,10 @@ func (m *mockFeedService) Create(feed *models.Feed) error {
 	if m.createFn != nil {
 		return m.createFn(feed)
 	}
-	// Default behavior: simulate successful creation with ID and timestamp
+	// Default behavior: simulate successful creation with ID, timestamp, and version
 	feed.ID = 1
 	feed.CreatedAt = time.Now()
+	feed.Version = 1
 	return nil
 }
 
