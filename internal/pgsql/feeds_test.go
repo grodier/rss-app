@@ -18,10 +18,11 @@ func TestFeedService_Create(t *testing.T) {
 
 	expectedID := int64(1)
 	expectedCreatedAt := time.Now()
+	expectedVersion := int32(1)
 
 	mock.ExpectQuery(`INSERT INTO feeds`).
 		WithArgs("Test Feed", "A test description", "https://example.com/feed.xml", "https://example.com", "en").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(expectedID, expectedCreatedAt))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at", "version"}).AddRow(expectedID, expectedCreatedAt, expectedVersion))
 
 	fs := NewFeedService(db)
 
@@ -44,6 +45,10 @@ func TestFeedService_Create(t *testing.T) {
 
 	if !feed.CreatedAt.Equal(expectedCreatedAt) {
 		t.Errorf("expected CreatedAt %v, got %v", expectedCreatedAt, feed.CreatedAt)
+	}
+
+	if feed.Version != expectedVersion {
+		t.Errorf("expected Version %d, got %d", expectedVersion, feed.Version)
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -91,9 +96,10 @@ func TestFeedService_Get(t *testing.T) {
 
 	expectedID := int64(1)
 	expectedCreatedAt := time.Now()
+	expectedVersion := int32(1)
 
-	rows := sqlmock.NewRows([]string{"id", "title", "description", "url", "site_url", "language", "created_at"}).
-		AddRow(expectedID, "Test Feed", "A test description", "https://example.com/feed.xml", "https://example.com", "en", expectedCreatedAt)
+	rows := sqlmock.NewRows([]string{"id", "title", "description", "url", "site_url", "language", "created_at", "version"}).
+		AddRow(expectedID, "Test Feed", "A test description", "https://example.com/feed.xml", "https://example.com", "en", expectedCreatedAt, expectedVersion)
 
 	mock.ExpectQuery(`SELECT .+ FROM feeds WHERE id = \$1`).
 		WithArgs(expectedID).
@@ -126,6 +132,9 @@ func TestFeedService_Get(t *testing.T) {
 	}
 	if feed.Language != "en" {
 		t.Errorf("got Language %q, want %q", feed.Language, "en")
+	}
+	if feed.Version != expectedVersion {
+		t.Errorf("got Version %d, want %d", feed.Version, expectedVersion)
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -185,9 +194,9 @@ func TestFeedService_Update(t *testing.T) {
 	}
 	defer db.Close()
 
-	mock.ExpectExec(`UPDATE feeds SET .+ WHERE id = \$6`).
-		WithArgs("Updated Feed", "Updated description", "https://example.com/updated.xml", "https://example.com/updated", "es", int64(1)).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`UPDATE feeds SET .+ WHERE id = \$6 AND version = \$7`).
+		WithArgs("Updated Feed", "Updated description", "https://example.com/updated.xml", "https://example.com/updated", "es", int64(1), int32(1)).
+		WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow(int32(2)))
 
 	fs := NewFeedService(db)
 
@@ -198,11 +207,16 @@ func TestFeedService_Update(t *testing.T) {
 		URL:         "https://example.com/updated.xml",
 		SiteURL:     "https://example.com/updated",
 		Language:    "es",
+		Version:     1,
 	}
 
 	err = fs.Update(feed)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if feed.Version != 2 {
+		t.Errorf("expected Version 2, got %d", feed.Version)
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -212,16 +226,16 @@ func TestFeedService_Update(t *testing.T) {
 
 func TestFeedService_Update_Errors(t *testing.T) {
 	tests := []struct {
-		name         string
-		feedID       int64
-		mockError    error // nil means no DB call expected (invalid ID)
-		rowsAffected int64 // 0 means record not found
-		wantError    error
+		name        string
+		feedID      int64
+		feedVersion int32
+		mockError   error // nil means no DB call expected (invalid ID)
+		wantError   error
 	}{
-		{"invalid id zero", 0, nil, 0, ErrRecordNotFound},
-		{"invalid id negative", -1, nil, 0, ErrRecordNotFound},
-		{"record not found", 999, nil, 0, ErrRecordNotFound},
-		{"database error", 1, sqlmock.ErrCancelled, 0, sqlmock.ErrCancelled},
+		{"invalid id zero", 0, 1, nil, ErrRecordNotFound},
+		{"invalid id negative", -1, 1, nil, ErrRecordNotFound},
+		{"edit conflict", 1, 1, sql.ErrNoRows, ErrEditConflict},
+		{"database error", 1, 1, sqlmock.ErrCancelled, sqlmock.ErrCancelled},
 	}
 
 	for _, tt := range tests {
@@ -234,15 +248,9 @@ func TestFeedService_Update_Errors(t *testing.T) {
 
 			// Only set up mock expectation if ID is valid (DB call will be made)
 			if tt.feedID >= 1 {
-				if tt.mockError != nil {
-					mock.ExpectExec(`UPDATE feeds SET .+ WHERE id = \$6`).
-						WithArgs("Test Feed", "A test description", "https://example.com/feed.xml", "https://example.com", "en", tt.feedID).
-						WillReturnError(tt.mockError)
-				} else {
-					mock.ExpectExec(`UPDATE feeds SET .+ WHERE id = \$6`).
-						WithArgs("Test Feed", "A test description", "https://example.com/feed.xml", "https://example.com", "en", tt.feedID).
-						WillReturnResult(sqlmock.NewResult(0, tt.rowsAffected))
-				}
+				mock.ExpectQuery(`UPDATE feeds SET .+ WHERE id = \$6 AND version = \$7`).
+					WithArgs("Test Feed", "A test description", "https://example.com/feed.xml", "https://example.com", "en", tt.feedID, tt.feedVersion).
+					WillReturnError(tt.mockError)
 			}
 
 			fs := NewFeedService(db)
@@ -254,6 +262,7 @@ func TestFeedService_Update_Errors(t *testing.T) {
 				URL:         "https://example.com/feed.xml",
 				SiteURL:     "https://example.com",
 				Language:    "en",
+				Version:     tt.feedVersion,
 			}
 
 			err = fs.Update(feed)

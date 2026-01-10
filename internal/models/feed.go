@@ -14,6 +14,7 @@ type Feed struct {
 	SiteURL     string    `json:"site_url"`
 	CreatedAt   time.Time `json:"-"`
 	Language    string    `json:"language,omitzero"`
+	Version     int32     `json:"version"`
 }
 
 type FeedService interface {

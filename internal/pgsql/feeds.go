@@ -20,14 +20,14 @@ func (fs *FeedService) Create(feed *models.Feed) error {
 	query := `
     INSERT INTO feeds (title, description, url, site_url, language)
     VALUES ($1, $2, $3, $4, $5)
-    RETURNING id, created_at`
+    RETURNING id, created_at, version`
 
 	args := []any{feed.Title, feed.Description, feed.URL, feed.SiteURL, feed.Language}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	return fs.db.QueryRowContext(ctx, query, args...).Scan(&feed.ID, &feed.CreatedAt)
+	return fs.db.QueryRowContext(ctx, query, args...).Scan(&feed.ID, &feed.CreatedAt, &feed.Version)
 }
 
 func (fs *FeedService) Get(id int64) (*models.Feed, error) {
@@ -36,7 +36,7 @@ func (fs *FeedService) Get(id int64) (*models.Feed, error) {
 	}
 
 	query := `
-    SELECT id, title, description, url, site_url, language, created_at
+    SELECT id, title, description, url, site_url, language, created_at, version
     FROM feeds
     WHERE id = $1`
 
@@ -53,6 +53,7 @@ func (fs *FeedService) Get(id int64) (*models.Feed, error) {
 		&feed.SiteURL,
 		&feed.Language,
 		&feed.CreatedAt,
+		&feed.Version,
 	)
 
 	if err != nil {
@@ -74,8 +75,9 @@ func (fs *FeedService) Update(feed *models.Feed) error {
 
 	query := `
     UPDATE feeds
-    SET title = $1, description = $2, url = $3, site_url = $4, language = $5
-    WHERE id = $6`
+    SET title = $1, description = $2, url = $3, site_url = $4, language = $5, version = version + 1
+    WHERE id = $6 AND version = $7
+    RETURNING version`
 
 	args := []any{
 		feed.Title,
@@ -84,23 +86,20 @@ func (fs *FeedService) Update(feed *models.Feed) error {
 		feed.SiteURL,
 		feed.Language,
 		feed.ID,
+		feed.Version,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	result, err := fs.db.ExecContext(ctx, query, args...)
+	err := fs.db.QueryRowContext(ctx, query, args...).Scan(&feed.Version)
 	if err != nil {
-		return err
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rowsAffected == 0 {
-		return ErrRecordNotFound
+		switch {
+		case err == sql.ErrNoRows:
+			return ErrEditConflict
+		default:
+			return err
+		}
 	}
 
 	return nil
