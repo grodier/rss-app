@@ -204,11 +204,13 @@ func (s *Server) handleListFeeds(w http.ResponseWriter, r *http.Request) {
 
 	input.Title = s.readString(qs, "title", "")
 	input.URL = s.readString(qs, "url", "")
+
 	input.Filters.Page = s.readInt(qs, "page", 1, v)
 	input.Filters.PageSize = s.readInt(qs, "page_size", 20, v)
 	input.Filters.Sort = s.readString(qs, "sort", "id")
+	input.Filters.SortSafelist = []string{"id", "title", "url", "-id", "-title", "-url"}
 
-	if !v.Valid() {
+	if models.ValidateFilters(v, input.Filters); !v.Valid() {
 		s.failedValidationResponse(w, r, v.Errors)
 		return
 	}
