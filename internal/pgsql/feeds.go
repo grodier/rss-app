@@ -72,12 +72,14 @@ func (fs *FeedService) GetAll(title, url string, filters models.Filters) ([]*mod
 	query := `
     SELECT id, title, description, url, site_url, language, created_at, version
     FROM feeds
+    WHERE (LOWER(title) = LOWER($1) OR $1 = '')
+    AND (LOWER(site_url) = LOWER($2) OR $2 = '')
     ORDER BY id ASC`
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	rows, err := fs.db.QueryContext(ctx, query)
+	rows, err := fs.db.QueryContext(ctx, query, title, url)
 	if err != nil {
 		return nil, err
 	}
