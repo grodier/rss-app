@@ -193,11 +193,9 @@ func (s *Server) handleDeleteFeed(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListFeeds(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Title    string
-		URL      string
-		Page     int
-		PageSize int
-		Sort     string
+		Title string
+		URL   string
+		models.Filters
 	}
 
 	v := validator.NewValidator()
@@ -206,9 +204,9 @@ func (s *Server) handleListFeeds(w http.ResponseWriter, r *http.Request) {
 
 	input.Title = s.readString(qs, "title", "")
 	input.URL = s.readString(qs, "url", "")
-	input.Page = s.readInt(qs, "page", 1, v)
-	input.PageSize = s.readInt(qs, "page_size", 20, v)
-	input.Sort = s.readString(qs, "sort", "id")
+	input.Filters.Page = s.readInt(qs, "page", 1, v)
+	input.Filters.PageSize = s.readInt(qs, "page_size", 20, v)
+	input.Filters.Sort = s.readString(qs, "sort", "id")
 
 	if !v.Valid() {
 		s.failedValidationResponse(w, r, v.Errors)
