@@ -20,6 +20,7 @@ type Feed struct {
 type FeedService interface {
 	Create(feed *Feed) error
 	Get(id int64) (*Feed, error)
+	GetAll(title, url string, filters Filters) ([]*Feed, error)
 	Update(feed *Feed) error
 	Delete(id int64) error
 }

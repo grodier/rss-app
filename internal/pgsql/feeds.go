@@ -68,6 +68,47 @@ func (fs *FeedService) Get(id int64) (*models.Feed, error) {
 	return &feed, nil
 }
 
+func (fs *FeedService) GetAll(title, url string, filters models.Filters) ([]*models.Feed, error) {
+	query := `
+    SELECT id, title, description, url, site_url, language, created_at, version
+    FROM feeds
+    ORDER BY id ASC`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := fs.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	feeds := []*models.Feed{}
+	for rows.Next() {
+		var feed models.Feed
+		err := rows.Scan(
+			&feed.ID,
+			&feed.Title,
+			&feed.Description,
+			&feed.URL,
+			&feed.SiteURL,
+			&feed.Language,
+			&feed.CreatedAt,
+			&feed.Version,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		feeds = append(feeds, &feed)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return feeds, nil
+}
+
 func (fs *FeedService) Update(feed *models.Feed) error {
 	if feed.ID < 1 {
 		return ErrRecordNotFound
