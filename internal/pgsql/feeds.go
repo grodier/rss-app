@@ -72,7 +72,7 @@ func (fs *FeedService) GetAll(title, url string, filters models.Filters) ([]*mod
 	query := `
     SELECT id, title, description, url, site_url, language, created_at, version
     FROM feeds
-    WHERE (LOWER(title) = LOWER($1) OR $1 = '')
+    WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '')
     AND (LOWER(site_url) = LOWER($2) OR $2 = '')
     ORDER BY id ASC`
 
