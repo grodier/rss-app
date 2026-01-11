@@ -190,3 +190,30 @@ func (s *Server) handleDeleteFeed(w http.ResponseWriter, r *http.Request) {
 		s.serverErrorResponse(w, r, err)
 	}
 }
+
+func (s *Server) handleListFeeds(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Title    string
+		URL      string
+		Page     int
+		PageSize int
+		Sort     string
+	}
+
+	v := validator.NewValidator()
+
+	qs := r.URL.Query()
+
+	input.Title = s.readString(qs, "title", "")
+	input.URL = s.readString(qs, "url", "")
+	input.Page = s.readInt(qs, "page", 1, v)
+	input.PageSize = s.readInt(qs, "page_size", 20, v)
+	input.Sort = s.readString(qs, "sort", "id")
+
+	if !v.Valid() {
+		s.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	fmt.Fprintf(w, "%+v\n", input)
+}
