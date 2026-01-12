@@ -215,13 +215,13 @@ func (s *Server) handleListFeeds(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	feeds, err := s.FeedService.GetAll(input.Title, input.URL, input.Filters)
+	feeds, metadata, err := s.FeedService.GetAll(input.Title, input.URL, input.Filters)
 	if err != nil {
 		s.serverErrorResponse(w, r, err)
 		return
 	}
 
-	err = s.writeJSON(w, http.StatusOK, envelope{"feeds": feeds}, nil)
+	err = s.writeJSON(w, http.StatusOK, envelope{"feeds": feeds, "metadata": metadata}, nil)
 	if err != nil {
 		s.serverErrorResponse(w, r, err)
 	}
