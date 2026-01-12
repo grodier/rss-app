@@ -190,3 +190,39 @@ func (s *Server) handleDeleteFeed(w http.ResponseWriter, r *http.Request) {
 		s.serverErrorResponse(w, r, err)
 	}
 }
+
+func (s *Server) handleListFeeds(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Title string
+		URL   string
+		models.Filters
+	}
+
+	v := validator.NewValidator()
+
+	qs := r.URL.Query()
+
+	input.Title = s.readString(qs, "title", "")
+	input.URL = s.readString(qs, "url", "")
+
+	input.Filters.Page = s.readInt(qs, "page", 1, v)
+	input.Filters.PageSize = s.readInt(qs, "page_size", 20, v)
+	input.Filters.Sort = s.readString(qs, "sort", "id")
+	input.Filters.SortSafelist = []string{"id", "title", "url", "-id", "-title", "-url"}
+
+	if models.ValidateFilters(v, input.Filters); !v.Valid() {
+		s.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	feeds, metadata, err := s.FeedService.GetAll(input.Title, input.URL, input.Filters)
+	if err != nil {
+		s.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = s.writeJSON(w, http.StatusOK, envelope{"feeds": feeds, "metadata": metadata}, nil)
+	if err != nil {
+		s.serverErrorResponse(w, r, err)
+	}
+}

@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/grodier/rss-app/internal/validator"
 )
 
 func (s *Server) readIDParam(r *http.Request) (int64, error) {
@@ -147,4 +149,33 @@ func (s *Server) failedValidationResponse(w http.ResponseWriter, r *http.Request
 func (s *Server) editConflictResponse(w http.ResponseWriter, r *http.Request) {
 	message := "unable to update the record due to an edit conflict, please try again"
 	s.errorResponse(w, r, http.StatusConflict, message)
+}
+
+func (s *Server) readString(qs url.Values, key, defaultValue string) string {
+	str := qs.Get(key)
+	if str == "" {
+		return defaultValue
+	}
+	return str
+}
+
+func (s *Server) readCSV(qs url.Values, key string, defaultValue []string) []string {
+	csvStr := qs.Get(key)
+	if csvStr == "" {
+		return defaultValue
+	}
+	return strings.Split(csvStr, ",")
+}
+
+func (s *Server) readInt(qs url.Values, key string, defaultValue int, v *validator.Validator) int {
+	str := qs.Get(key)
+	if str == "" {
+		return defaultValue
+	}
+	i, err := strconv.Atoi(str)
+	if err != nil {
+		v.AddError(key, "must be an integer value")
+		return defaultValue
+	}
+	return i
 }

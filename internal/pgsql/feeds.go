@@ -3,6 +3,7 @@ package pgsql
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/grodier/rss-app/internal/models"
@@ -66,6 +67,56 @@ func (fs *FeedService) Get(id int64) (*models.Feed, error) {
 	}
 
 	return &feed, nil
+}
+
+func (fs *FeedService) GetAll(title, url string, filters models.Filters) ([]*models.Feed, models.Metadata, error) {
+	query := fmt.Sprintf(`
+    SELECT count(*) OVER(), id, title, description, url, site_url, language, created_at, version
+    FROM feeds
+    WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '')
+    AND (LOWER(site_url) = LOWER($2) OR $2 = '')
+    ORDER BY %s %s, id ASC
+    LIMIT $3 OFFSET $4`, filters.SortColumn(), filters.SortDirection())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	args := []any{title, url, filters.Limit(), filters.Offset()}
+	rows, err := fs.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, models.Metadata{}, err
+	}
+	defer rows.Close()
+
+	totalRecords := 0
+	feeds := []*models.Feed{}
+
+	for rows.Next() {
+		var feed models.Feed
+		err := rows.Scan(
+			&totalRecords,
+			&feed.ID,
+			&feed.Title,
+			&feed.Description,
+			&feed.URL,
+			&feed.SiteURL,
+			&feed.Language,
+			&feed.CreatedAt,
+			&feed.Version,
+		)
+		if err != nil {
+			return nil, models.Metadata{}, err
+		}
+
+		feeds = append(feeds, &feed)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, models.Metadata{}, err
+	}
+
+	metadata := models.CalculateMetadata(totalRecords, filters.Page, filters.PageSize)
+	return feeds, metadata, nil
 }
 
 func (fs *FeedService) Update(feed *models.Feed) error {

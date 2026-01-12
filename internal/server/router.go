@@ -16,6 +16,7 @@ func (s *Server) router() http.Handler {
 
 	router.Get("/v1/healthcheck", s.handleHealthcheck)
 
+	router.Get("/v1/feeds", s.handleListFeeds)
 	router.Post("/v1/admin/feeds", s.handleCreateFeed)
 	router.Get("/v1/feeds/{id}", s.handleShowFeed)
 	router.Patch("/v1/feeds/{id}", s.handleUpdateFeed)
