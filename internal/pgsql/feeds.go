@@ -75,12 +75,14 @@ func (fs *FeedService) GetAll(title, url string, filters models.Filters) ([]*mod
     FROM feeds
     WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '')
     AND (LOWER(site_url) = LOWER($2) OR $2 = '')
-    ORDER BY %s %s, id ASC`, filters.SortColumn(), filters.SortDirection())
+    ORDER BY %s %s, id ASC
+    LIMIT $3 OFFSET $4`, filters.SortColumn(), filters.SortDirection())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	rows, err := fs.db.QueryContext(ctx, query, title, url)
+	args := []any{title, url, filters.Limit(), filters.Offset()}
+	rows, err := fs.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
