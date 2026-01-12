@@ -11,6 +11,7 @@ import (
 type mockFeedService struct {
 	createFn func(feed *models.Feed) error
 	getFn    func(id int64) (*models.Feed, error)
+	getAllFn func(title, url string, filters models.Filters) ([]*models.Feed, models.Metadata, error)
 	updateFn func(feed *models.Feed) error
 	deleteFn func(id int64) error
 }
@@ -31,6 +32,13 @@ func (m *mockFeedService) Get(id int64) (*models.Feed, error) {
 		return m.getFn(id)
 	}
 	return nil, errors.New("not implemented")
+}
+
+func (m *mockFeedService) GetAll(title, url string, filters models.Filters) ([]*models.Feed, models.Metadata, error) {
+	if m.getAllFn != nil {
+		return m.getAllFn(title, url, filters)
+	}
+	return nil, models.Metadata{}, errors.New("not implemented")
 }
 
 func (m *mockFeedService) Update(feed *models.Feed) error {

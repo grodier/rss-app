@@ -940,3 +940,379 @@ func TestHandleDeleteFeed_ServiceError(t *testing.T) {
 		t.Errorf("got error %q, want %q", resp.Error, wantError)
 	}
 }
+
+func TestHandleListFeeds_Success(t *testing.T) {
+	expectedFeeds := []*models.Feed{
+		{
+			ID:          1,
+			Title:       "Test Feed 1",
+			Description: "Description 1",
+			URL:         "https://example1.com/feed.xml",
+			SiteURL:     "https://example1.com",
+			Language:    "en",
+			Version:     1,
+		},
+		{
+			ID:          2,
+			Title:       "Test Feed 2",
+			Description: "Description 2",
+			URL:         "https://example2.com/feed.xml",
+			SiteURL:     "https://example2.com",
+			Language:    "es",
+			Version:     1,
+		},
+	}
+	expectedMetadata := models.Metadata{
+		CurrentPage:  1,
+		PageSize:     20,
+		FirstPage:    1,
+		LastPage:     1,
+		TotalRecords: 2,
+	}
+
+	s := newTestServer(&testServerOptions{
+		feedService: &mockFeedService{
+			getAllFn: func(title, url string, filters models.Filters) ([]*models.Feed, models.Metadata, error) {
+				// Verify default parameters
+				if title != "" {
+					t.Errorf("expected empty title filter, got %q", title)
+				}
+				if url != "" {
+					t.Errorf("expected empty url filter, got %q", url)
+				}
+				if filters.Page != 1 {
+					t.Errorf("expected page 1, got %d", filters.Page)
+				}
+				if filters.PageSize != 20 {
+					t.Errorf("expected page_size 20, got %d", filters.PageSize)
+				}
+				if filters.Sort != "id" {
+					t.Errorf("expected sort 'id', got %q", filters.Sort)
+				}
+				return expectedFeeds, expectedMetadata, nil
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/feeds", nil)
+	rr := httptest.NewRecorder()
+
+	s.router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Errorf("got Content-Type %q, want %q", got, "application/json")
+	}
+
+	var envelope struct {
+		Feeds []struct {
+			ID          int    `json:"id"`
+			Title       string `json:"title"`
+			Description string `json:"description"`
+			URL         string `json:"url"`
+			SiteURL     string `json:"site_url"`
+			Language    string `json:"language"`
+		} `json:"feeds"`
+		Metadata struct {
+			CurrentPage  int `json:"current_page"`
+			PageSize     int `json:"page_size"`
+			FirstPage    int `json:"first_page"`
+			LastPage     int `json:"last_page"`
+			TotalRecords int `json:"total_records"`
+		} `json:"metadata"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if len(envelope.Feeds) != 2 {
+		t.Fatalf("expected 2 feeds, got %d", len(envelope.Feeds))
+	}
+
+	if envelope.Feeds[0].ID != 1 {
+		t.Errorf("got id %d, want 1", envelope.Feeds[0].ID)
+	}
+	if envelope.Feeds[0].Title != "Test Feed 1" {
+		t.Errorf("got title %q, want %q", envelope.Feeds[0].Title, "Test Feed 1")
+	}
+
+	if envelope.Metadata.CurrentPage != 1 {
+		t.Errorf("got current_page %d, want 1", envelope.Metadata.CurrentPage)
+	}
+	if envelope.Metadata.TotalRecords != 2 {
+		t.Errorf("got total_records %d, want 2", envelope.Metadata.TotalRecords)
+	}
+}
+
+func TestHandleListFeeds_WithFilters(t *testing.T) {
+	tests := []struct {
+		name          string
+		queryString   string
+		wantTitle     string
+		wantURL       string
+		wantPage      int
+		wantPageSize  int
+		wantSort      string
+	}{
+		{
+			name:          "filter by title",
+			queryString:   "?title=technology",
+			wantTitle:     "technology",
+			wantURL:       "",
+			wantPage:      1,
+			wantPageSize:  20,
+			wantSort:      "id",
+		},
+		{
+			name:          "filter by url",
+			queryString:   "?url=https://example.com",
+			wantTitle:     "",
+			wantURL:       "https://example.com",
+			wantPage:      1,
+			wantPageSize:  20,
+			wantSort:      "id",
+		},
+		{
+			name:          "custom pagination",
+			queryString:   "?page=2&page_size=10",
+			wantTitle:     "",
+			wantURL:       "",
+			wantPage:      2,
+			wantPageSize:  10,
+			wantSort:      "id",
+		},
+		{
+			name:          "sort by title ascending",
+			queryString:   "?sort=title",
+			wantTitle:     "",
+			wantURL:       "",
+			wantPage:      1,
+			wantPageSize:  20,
+			wantSort:      "title",
+		},
+		{
+			name:          "sort by title descending",
+			queryString:   "?sort=-title",
+			wantTitle:     "",
+			wantURL:       "",
+			wantPage:      1,
+			wantPageSize:  20,
+			wantSort:      "-title",
+		},
+		{
+			name:          "sort by url ascending",
+			queryString:   "?sort=url",
+			wantTitle:     "",
+			wantURL:       "",
+			wantPage:      1,
+			wantPageSize:  20,
+			wantSort:      "url",
+		},
+		{
+			name:          "sort by url descending",
+			queryString:   "?sort=-url",
+			wantTitle:     "",
+			wantURL:       "",
+			wantPage:      1,
+			wantPageSize:  20,
+			wantSort:      "-url",
+		},
+		{
+			name:          "sort by id descending",
+			queryString:   "?sort=-id",
+			wantTitle:     "",
+			wantURL:       "",
+			wantPage:      1,
+			wantPageSize:  20,
+			wantSort:      "-id",
+		},
+		{
+			name:          "combined filters and pagination",
+			queryString:   "?title=tech&page=3&page_size=5&sort=-title",
+			wantTitle:     "tech",
+			wantURL:       "",
+			wantPage:      3,
+			wantPageSize:  5,
+			wantSort:      "-title",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestServer(&testServerOptions{
+				feedService: &mockFeedService{
+					getAllFn: func(title, url string, filters models.Filters) ([]*models.Feed, models.Metadata, error) {
+						if title != tt.wantTitle {
+							t.Errorf("got title %q, want %q", title, tt.wantTitle)
+						}
+						if url != tt.wantURL {
+							t.Errorf("got url %q, want %q", url, tt.wantURL)
+						}
+						if filters.Page != tt.wantPage {
+							t.Errorf("got page %d, want %d", filters.Page, tt.wantPage)
+						}
+						if filters.PageSize != tt.wantPageSize {
+							t.Errorf("got page_size %d, want %d", filters.PageSize, tt.wantPageSize)
+						}
+						if filters.Sort != tt.wantSort {
+							t.Errorf("got sort %q, want %q", filters.Sort, tt.wantSort)
+						}
+						return []*models.Feed{}, models.Metadata{}, nil
+					},
+				},
+			})
+
+			req := httptest.NewRequest(http.MethodGet, "/v1/feeds"+tt.queryString, nil)
+			rr := httptest.NewRecorder()
+
+			s.router().ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusOK {
+				t.Errorf("got status %d, want %d", rr.Code, http.StatusOK)
+			}
+		})
+	}
+}
+
+func TestHandleListFeeds_EmptyResult(t *testing.T) {
+	s := newTestServer(&testServerOptions{
+		feedService: &mockFeedService{
+			getAllFn: func(title, url string, filters models.Filters) ([]*models.Feed, models.Metadata, error) {
+				return []*models.Feed{}, models.Metadata{}, nil
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/feeds", nil)
+	rr := httptest.NewRecorder()
+
+	s.router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var envelope struct {
+		Feeds    []any          `json:"feeds"`
+		Metadata models.Metadata `json:"metadata"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if len(envelope.Feeds) != 0 {
+		t.Errorf("expected empty feeds array, got %d feeds", len(envelope.Feeds))
+	}
+}
+
+func TestHandleListFeeds_ValidationErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		query      string
+		wantErrors map[string]string
+	}{
+		{
+			name:       "page zero",
+			query:      "?page=0",
+			wantErrors: map[string]string{"page": "must be greater than zero"},
+		},
+		{
+			name:       "page negative",
+			query:      "?page=-1",
+			wantErrors: map[string]string{"page": "must be greater than zero"},
+		},
+		{
+			name:       "page too large",
+			query:      "?page=10000001",
+			wantErrors: map[string]string{"page": "must be a maximum of 10 million"},
+		},
+		{
+			name:       "page_size zero",
+			query:      "?page_size=0",
+			wantErrors: map[string]string{"page_size": "must be greater than zero"},
+		},
+		{
+			name:       "page_size negative",
+			query:      "?page_size=-5",
+			wantErrors: map[string]string{"page_size": "must be greater than zero"},
+		},
+		{
+			name:       "page_size too large",
+			query:      "?page_size=101",
+			wantErrors: map[string]string{"page_size": "must not be more than 100"},
+		},
+		{
+			name:       "invalid sort value",
+			query:      "?sort=invalid",
+			wantErrors: map[string]string{"sort": "invalid sort value"},
+		},
+		{
+			name:       "invalid sort with dash prefix",
+			query:      "?sort=-invalid",
+			wantErrors: map[string]string{"sort": "invalid sort value"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestServer(&testServerOptions{
+				feedService: &mockFeedService{},
+			})
+
+			req := httptest.NewRequest(http.MethodGet, "/v1/feeds"+tt.query, nil)
+			rr := httptest.NewRecorder()
+
+			s.router().ServeHTTP(rr, req)
+
+			if rr.Code != http.StatusUnprocessableEntity {
+				t.Errorf("got status %d, want %d", rr.Code, http.StatusUnprocessableEntity)
+			}
+
+			var resp struct {
+				Error map[string]string `json:"error"`
+			}
+			if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to parse response: %v", err)
+			}
+
+			for field, wantMsg := range tt.wantErrors {
+				if resp.Error[field] != wantMsg {
+					t.Errorf("field %q: got %q, want %q", field, resp.Error[field], wantMsg)
+				}
+			}
+		})
+	}
+}
+
+func TestHandleListFeeds_ServiceError(t *testing.T) {
+	s := newTestServer(&testServerOptions{
+		feedService: &mockFeedService{
+			getAllFn: func(title, url string, filters models.Filters) ([]*models.Feed, models.Metadata, error) {
+				return nil, models.Metadata{}, errors.New("database connection failed")
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/feeds", nil)
+	rr := httptest.NewRecorder()
+
+	s.router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusInternalServerError)
+	}
+
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	wantError := "the server encountered a problem and could not process your request"
+	if resp.Error != wantError {
+		t.Errorf("got error %q, want %q", resp.Error, wantError)
+	}
+}
