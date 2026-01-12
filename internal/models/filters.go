@@ -1,6 +1,11 @@
 package models
 
-import "github.com/grodier/rss-app/internal/validator"
+import (
+	"slices"
+	"strings"
+
+	"github.com/grodier/rss-app/internal/validator"
+)
 
 type Filters struct {
 	Page         int
@@ -16,4 +21,20 @@ func ValidateFilters(v *validator.Validator, f Filters) {
 	v.Check(f.PageSize <= 100, "page_size", "must not be more than 100")
 
 	v.Check(validator.PermittedValue(f.Sort, f.SortSafelist...), "sort", "invalid sort value")
+}
+
+func (f Filters) SortColumn() string {
+	if slices.Contains(f.SortSafelist, f.Sort) {
+		return strings.TrimPrefix(f.Sort, "-")
+	}
+
+	panic("unsafe sort parameter: " + f.Sort)
+}
+
+func (f Filters) SortDirection() string {
+	if strings.HasPrefix(f.Sort, "-") {
+		return "DESC"
+	}
+
+	return "ASC"
 }

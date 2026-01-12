@@ -3,6 +3,7 @@ package pgsql
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/grodier/rss-app/internal/models"
@@ -69,12 +70,12 @@ func (fs *FeedService) Get(id int64) (*models.Feed, error) {
 }
 
 func (fs *FeedService) GetAll(title, url string, filters models.Filters) ([]*models.Feed, error) {
-	query := `
+	query := fmt.Sprintf(`
     SELECT id, title, description, url, site_url, language, created_at, version
     FROM feeds
     WHERE (to_tsvector('simple', title) @@ plainto_tsquery('simple', $1) OR $1 = '')
     AND (LOWER(site_url) = LOWER($2) OR $2 = '')
-    ORDER BY id ASC`
+    ORDER BY %s %s, id ASC`, filters.SortColumn(), filters.SortDirection())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
