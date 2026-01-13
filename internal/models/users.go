@@ -18,6 +18,12 @@ type User struct {
 	Version   int       `json:"-"`
 }
 
+type UserService interface {
+	Create(user *User) error
+	GetByEmail(email string) (*User, error)
+	Update(user *User) error
+}
+
 type password struct {
 	plaintext *string
 	hash      []byte
