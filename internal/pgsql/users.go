@@ -2,6 +2,8 @@ package pgsql
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/grodier/rss-app/internal/models"
@@ -21,7 +23,7 @@ func (us *UserService) Create(user *models.User) error {
   VALUES($1, $2, $3, $4)
   RETURN id, create_at, version`
 
-	args := []any{user.Name, user.Email, user.Password.GetHash(), user.Activated}
+	args := []any{user.Name, user.Email, user.Password.Hash, user.Activated}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -40,7 +42,37 @@ func (us *UserService) Create(user *models.User) error {
 }
 
 func (us *UserService) GetByEmail(email string) (*models.User, error) {
-	return nil, nil
+	query := `
+  SELECT id, created_at, name, email, password_hash, activated, version
+  FROM users
+  WHERE email = $1
+  `
+
+	var user models.User
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	err := us.db.QueryRowContext(ctx, query, email).Scan(
+		&user.ID,
+		&user.CreatedAt,
+		&user.Name,
+		&user.Email,
+		&user.Password.Hash,
+		&user.Activated,
+		&user.Version,
+	)
+
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &user, nil
 }
 
 func (us *UserService) Update(user *models.User) error {

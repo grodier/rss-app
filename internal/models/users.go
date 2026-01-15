@@ -25,8 +25,8 @@ type UserService interface {
 }
 
 type password struct {
-	plaintext *string
-	hash      []byte
+	Plaintext *string
+	Hash      []byte
 }
 
 func (p *password) Set(plaintextPassword string) error {
@@ -35,14 +35,14 @@ func (p *password) Set(plaintextPassword string) error {
 		return err
 	}
 
-	p.plaintext = &plaintextPassword
-	p.hash = hash
+	p.Plaintext = &plaintextPassword
+	p.Hash = hash
 
 	return nil
 }
 
 func (p *password) Matches(plaintextPassword string) (bool, error) {
-	err := bcrypt.CompareHashAndPassword(p.hash, []byte(plaintextPassword))
+	err := bcrypt.CompareHashAndPassword(p.Hash, []byte(plaintextPassword))
 	if err != nil {
 		switch {
 		case errors.Is(err, bcrypt.ErrMismatchedHashAndPassword):
@@ -53,10 +53,6 @@ func (p *password) Matches(plaintextPassword string) (bool, error) {
 	}
 
 	return true, nil
-}
-
-func (p *password) GetHash() []byte {
-	return p.hash
 }
 
 func ValidateEmail(v *validator.Validator, email string) {
@@ -76,11 +72,11 @@ func ValidateUser(v *validator.Validator, user *User) {
 
 	ValidateEmail(v, user.Email)
 
-	if user.Password.plaintext != nil {
-		ValidatePlaintextPassword(v, *user.Password.plaintext)
+	if user.Password.Plaintext != nil {
+		ValidatePlaintextPassword(v, *user.Password.Plaintext)
 	}
 
-	if user.Password.hash == nil {
+	if user.Password.Hash == nil {
 		panic("missing password hash for user")
 	}
 }
