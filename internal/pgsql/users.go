@@ -21,7 +21,7 @@ func (us *UserService) Create(user *models.User) error {
 	query := `
   INSERT INTO users (name, email, password_hash, activated)
   VALUES($1, $2, $3, $4)
-  RETURN id, create_at, version`
+  RETURNING id, created_at, version`
 
 	args := []any{user.Name, user.Email, user.Password.Hash, user.Activated}
 
