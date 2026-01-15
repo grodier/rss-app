@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
   name text NOT NULL,
   email citext NOT NULL UNIQUE,
   password_hash bytea NOT NULL,
-  active boolean NOT NULL,
+  activated boolean NOT NULL,
   version integer NOT NULL DEFAULT 1
 );
 
