@@ -20,6 +20,7 @@ type Server struct {
 	Version string
 
 	FeedService models.FeedService
+	UserService models.UserService
 
 	server *http.Server
 	logger *slog.Logger
