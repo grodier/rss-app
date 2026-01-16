@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -222,6 +223,56 @@ func (s *Server) handleListFeeds(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = s.writeJSON(w, http.StatusOK, envelope{"feeds": feeds, "metadata": metadata}, nil)
+	if err != nil {
+		s.serverErrorResponse(w, r, err)
+	}
+}
+
+func (s *Server) handleRegisterUser(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	err := s.readJSON(w, r, &input)
+	if err != nil {
+		s.badRequestResponse(w, r, err)
+		return
+	}
+
+	user := &models.User{
+		Name:      input.Name,
+		Email:     input.Email,
+		Activated: false,
+	}
+
+	err = user.Password.Set(input.Password)
+	if err != nil {
+		s.serverErrorResponse(w, r, err)
+		return
+	}
+
+	v := validator.NewValidator()
+
+	if models.ValidateUser(v, user); !v.Valid() {
+		s.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	err = s.UserService.Create(user)
+	if err != nil {
+		switch {
+		case errors.Is(err, pgsql.ErrDuplicateEmail):
+			v.AddError("email", "a user with this email address already exists")
+			s.failedValidationResponse(w, r, v.Errors)
+		default:
+			s.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = s.writeJSON(w, http.StatusCreated, envelope{"user": user}, nil)
 	if err != nil {
 		s.serverErrorResponse(w, r, err)
 	}

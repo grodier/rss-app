@@ -54,3 +54,35 @@ func (m *mockFeedService) Delete(id int64) error {
 	}
 	return errors.New("not implemented")
 }
+
+// mockUserService is a mock implementation of models.UserService for testing
+type mockUserService struct {
+	createFn     func(user *models.User) error
+	getByEmailFn func(email string) (*models.User, error)
+	updateFn     func(user *models.User) error
+}
+
+func (m *mockUserService) Create(user *models.User) error {
+	if m.createFn != nil {
+		return m.createFn(user)
+	}
+	// Default behavior: simulate successful creation with ID, timestamp, and version
+	user.ID = 1
+	user.CreatedAt = time.Now()
+	user.Version = 1
+	return nil
+}
+
+func (m *mockUserService) GetByEmail(email string) (*models.User, error) {
+	if m.getByEmailFn != nil {
+		return m.getByEmailFn(email)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockUserService) Update(user *models.User) error {
+	if m.updateFn != nil {
+		return m.updateFn(user)
+	}
+	return errors.New("not implemented")
+}

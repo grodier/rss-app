@@ -22,5 +22,7 @@ func (s *Server) router() http.Handler {
 	router.Patch("/v1/feeds/{id}", s.handleUpdateFeed)
 	router.Delete("/v1/feeds/{id}", s.handleDeleteFeed)
 
+	router.Post("/v1/users", s.handleRegisterUser)
+
 	return router
 }

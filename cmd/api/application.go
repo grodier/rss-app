@@ -75,6 +75,7 @@ func (app *Application) Run(ctx context.Context, args []string) error {
 	srv.Version = version
 
 	srv.FeedService = pgsql.NewFeedService(db)
+	srv.UserService = pgsql.NewUserService(db)
 
 	if err := srv.Serve(); err != nil {
 		return err

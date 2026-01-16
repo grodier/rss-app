@@ -25,6 +25,7 @@ var validFeedBody = `{
 // testServerOptions configures optional dependencies for test server
 type testServerOptions struct {
 	feedService models.FeedService
+	userService models.UserService
 	version     string
 	env         string
 }
@@ -41,6 +42,9 @@ func newTestServer(opts *testServerOptions) *Server {
 	if opts != nil {
 		if opts.feedService != nil {
 			s.FeedService = opts.feedService
+		}
+		if opts.userService != nil {
+			s.UserService = opts.userService
 		}
 		if opts.version != "" {
 			s.Version = opts.version
@@ -1300,6 +1304,245 @@ func TestHandleListFeeds_ServiceError(t *testing.T) {
 	rr := httptest.NewRecorder()
 
 	s.router().ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusInternalServerError)
+	}
+
+	var resp struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	wantError := "the server encountered a problem and could not process your request"
+	if resp.Error != wantError {
+		t.Errorf("got error %q, want %q", resp.Error, wantError)
+	}
+}
+
+// validUserBody is a shared test fixture for valid user registration requests
+var validUserBody = `{
+	"name": "Test User",
+	"email": "test@example.com",
+	"password": "password123"
+}`
+
+func TestHandleRegisterUser_Success(t *testing.T) {
+	s := newTestServer(&testServerOptions{
+		userService: &mockUserService{},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/users", strings.NewReader(validUserBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	s.handleRegisterUser(rr, req)
+
+	// Assert status
+	if rr.Code != http.StatusCreated {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusCreated)
+	}
+
+	// Assert headers
+	if got := rr.Header().Get("Content-Type"); got != "application/json" {
+		t.Errorf("got Content-Type %q, want %q", got, "application/json")
+	}
+
+	// Assert body structure
+	var envelope struct {
+		User struct {
+			ID        int    `json:"id"`
+			Name      string `json:"name"`
+			Email     string `json:"email"`
+			Activated bool   `json:"activated"`
+		} `json:"user"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	// Check populated fields
+	if envelope.User.ID != 1 {
+		t.Errorf("got id %d, want 1", envelope.User.ID)
+	}
+	if envelope.User.Name != "Test User" {
+		t.Errorf("got name %q, want %q", envelope.User.Name, "Test User")
+	}
+	if envelope.User.Email != "test@example.com" {
+		t.Errorf("got email %q, want %q", envelope.User.Email, "test@example.com")
+	}
+	if envelope.User.Activated != false {
+		t.Errorf("got activated %v, want false", envelope.User.Activated)
+	}
+}
+
+func TestHandleRegisterUser_JSONParsingErrors(t *testing.T) {
+	tests := []struct {
+		name      string
+		body      string
+		wantError string
+	}{
+		{"empty body", "", "body must not be empty"},
+		{"wrong type for field", `{"name": 123}`, `body contains incorrect JSON type for field "name"`},
+		{"array instead of object", `["foo", "bar"]`, "body contains incorrect JSON type (at character 1)"},
+		{"malformed json", `{"name": "Test User", }`, "body contains badly-formed JSON (at character 23)"},
+		{"unknown field", `{"name": "Test User", "unknown_field": "value"}`, `body contains unknown key "unknown_field"`},
+		{"multiple json values", `{"name": "Test User"} {"email": "test@example.com"}`, "body must only contain a single JSON value"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestServer(nil)
+
+			req := httptest.NewRequest(http.MethodPost, "/v1/users", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+
+			s.handleRegisterUser(rr, req)
+
+			if rr.Code != http.StatusBadRequest {
+				t.Errorf("got status %d, want %d", rr.Code, http.StatusBadRequest)
+			}
+
+			var resp struct {
+				Error string `json:"error"`
+			}
+			if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to parse response: %v", err)
+			}
+			if resp.Error != tt.wantError {
+				t.Errorf("got error %q, want %q", resp.Error, tt.wantError)
+			}
+		})
+	}
+}
+
+func TestHandleRegisterUser_ValidationErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		wantErrors map[string]string
+	}{
+		{
+			name:       "missing name",
+			body:       `{"email": "test@example.com", "password": "password123"}`,
+			wantErrors: map[string]string{"name": "must be provided"},
+		},
+		{
+			name:       "name too long",
+			body:       `{"name": "` + strings.Repeat("a", 501) + `", "email": "test@example.com", "password": "password123"}`,
+			wantErrors: map[string]string{"name": "must be no more than 500 bytes long"},
+		},
+		{
+			name:       "missing email",
+			body:       `{"name": "Test User", "password": "password123"}`,
+			wantErrors: map[string]string{"email": "must be provided"},
+		},
+		{
+			name:       "invalid email",
+			body:       `{"name": "Test User", "email": "invalid-email", "password": "password123"}`,
+			wantErrors: map[string]string{"email": "must be a valid email address"},
+		},
+		{
+			name:       "missing password",
+			body:       `{"name": "Test User", "email": "test@example.com"}`,
+			wantErrors: map[string]string{"password": "must be provided"},
+		},
+		{
+			name:       "password too short",
+			body:       `{"name": "Test User", "email": "test@example.com", "password": "short"}`,
+			wantErrors: map[string]string{"password": "must be at least 8 bytes long"},
+		},
+		{
+			name:       "multiple validation failures",
+			body:       `{"name": "", "email": "", "password": ""}`,
+			wantErrors: map[string]string{"name": "must be provided", "email": "must be provided", "password": "must be provided"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newTestServer(&testServerOptions{
+				userService: &mockUserService{},
+			})
+
+			req := httptest.NewRequest(http.MethodPost, "/v1/users", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+
+			s.handleRegisterUser(rr, req)
+
+			if rr.Code != http.StatusUnprocessableEntity {
+				t.Errorf("got status %d, want %d", rr.Code, http.StatusUnprocessableEntity)
+			}
+
+			var resp struct {
+				Error map[string]string `json:"error"`
+			}
+			if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to parse response: %v", err)
+			}
+
+			for field, wantMsg := range tt.wantErrors {
+				if resp.Error[field] != wantMsg {
+					t.Errorf("field %q: got %q, want %q", field, resp.Error[field], wantMsg)
+				}
+			}
+
+			if len(resp.Error) != len(tt.wantErrors) {
+				t.Errorf("got %d errors, want %d", len(resp.Error), len(tt.wantErrors))
+			}
+		})
+	}
+}
+
+func TestHandleRegisterUser_DuplicateEmail(t *testing.T) {
+	s := newTestServer(&testServerOptions{
+		userService: &mockUserService{
+			createFn: func(user *models.User) error {
+				return pgsql.ErrDuplicateEmail
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/users", strings.NewReader(validUserBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	s.handleRegisterUser(rr, req)
+
+	if rr.Code != http.StatusUnprocessableEntity {
+		t.Errorf("got status %d, want %d", rr.Code, http.StatusUnprocessableEntity)
+	}
+
+	var resp struct {
+		Error map[string]string `json:"error"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	wantError := "a user with this email address already exists"
+	if resp.Error["email"] != wantError {
+		t.Errorf("got error %q, want %q", resp.Error["email"], wantError)
+	}
+}
+
+func TestHandleRegisterUser_ServiceError(t *testing.T) {
+	s := newTestServer(&testServerOptions{
+		userService: &mockUserService{
+			createFn: func(user *models.User) error {
+				return errors.New("database connection failed")
+			},
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/users", strings.NewReader(validUserBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	s.handleRegisterUser(rr, req)
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Errorf("got status %d, want %d", rr.Code, http.StatusInternalServerError)
