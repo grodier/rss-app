@@ -1337,7 +1337,7 @@ func TestHandleRegisterUser_Success(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	s.router().ServeHTTP(rr, req)
+	s.handleRegisterUser(rr, req)
 
 	// Assert status
 	if rr.Code != http.StatusCreated {
@@ -1399,7 +1399,7 @@ func TestHandleRegisterUser_JSONParsingErrors(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			rr := httptest.NewRecorder()
 
-			s.router().ServeHTTP(rr, req)
+			s.handleRegisterUser(rr, req)
 
 			if rr.Code != http.StatusBadRequest {
 				t.Errorf("got status %d, want %d", rr.Code, http.StatusBadRequest)
@@ -1471,7 +1471,7 @@ func TestHandleRegisterUser_ValidationErrors(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			rr := httptest.NewRecorder()
 
-			s.router().ServeHTTP(rr, req)
+			s.handleRegisterUser(rr, req)
 
 			if rr.Code != http.StatusUnprocessableEntity {
 				t.Errorf("got status %d, want %d", rr.Code, http.StatusUnprocessableEntity)
@@ -1510,7 +1510,7 @@ func TestHandleRegisterUser_DuplicateEmail(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	s.router().ServeHTTP(rr, req)
+	s.handleRegisterUser(rr, req)
 
 	if rr.Code != http.StatusUnprocessableEntity {
 		t.Errorf("got status %d, want %d", rr.Code, http.StatusUnprocessableEntity)
@@ -1542,7 +1542,7 @@ func TestHandleRegisterUser_ServiceError(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 
-	s.router().ServeHTTP(rr, req)
+	s.handleRegisterUser(rr, req)
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Errorf("got status %d, want %d", rr.Code, http.StatusInternalServerError)
